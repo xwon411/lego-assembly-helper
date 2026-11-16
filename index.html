@@ -740,23 +740,42 @@ function tweenCamera(target, dist, dur = 650) {
   requestRender();
 }
 
+// 자동 카메라 여유: 지금까지 쌓은 모델이 화면의 1/AUTO_CAM_MARGIN 정도를 차지하게 (키우면 더 멀어짐)
+const AUTO_CAM_MARGIN = 1.5;
+
+// 지금 보는 방향 그대로, target을 화면 가운데에 두고 box 전체가 화면에 들어오는 거리
+function fitBoxDistance(box, target, margin) {
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  const right = new THREE.Vector3().crossVectors(camera.up, dir);
+  if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+  right.normalize();
+  const up = new THREE.Vector3().crossVectors(dir, right);
+  const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), tanH = tanV * camera.aspect;
+  const v = new THREE.Vector3();
+  let d = 40;
+  for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
+    v.set(x, y, z).sub(target);
+    const depth = v.dot(dir);
+    d = Math.max(d, depth + margin * Math.abs(v.dot(right)) / tanH, depth + margin * Math.abs(v.dot(up)) / tanV);
+  }
+  return d;
+}
+
 function frameStep(index) {
   const visible = new THREE.Box3(), fresh = new THREE.Box3();
   for (let i = 0; i <= index; i++) for (const b of state.steps[i]) visible.union(state.info.get(b).box);
   for (const b of state.steps[index]) fresh.union(state.info.get(b).box);
 
-  // 기본: 지금까지 보이는 부품 전체가 화면에 들어오게 하되, 중심은 새 부품 쪽으로 당김
+  // 기본: 지금까지 쌓은 부품 전체가 여유 있게 화면에 들어오게 하되, 중심은 새 부품 쪽으로 당김
   const target = visible.getCenter(new THREE.Vector3()).lerp(fresh.getCenter(new THREE.Vector3()), 0.45);
-  // 중심이 이동한 만큼 여유를 줘서 전체가 잘리지 않게
-  const shift = target.distanceTo(visible.getCenter(new THREE.Vector3()));
-  const wholeDist = fitDistance(visible) + shift * 1.2;
+  const wholeDist = fitBoxDistance(visible, target, AUTO_CAM_MARGIN);
 
-  // 새 부품이 전체에 비해 작으면(넓은 모델) 새 부품 쪽으로 확대.
-  // 주변이 어디인지 알 수 있게 새 부품 크기의 2배, 최소한 전체의 30%·5스터드 반경은 보여 준다.
+  // 큰 모델(대략 30스터드 폭 이상)에서 새 부품이 아주 작게 보일 때만 새 부품 쪽으로 확대.
+  // 주변이 어디인지 알 수 있게 새 부품 크기의 3배, 최소한 전체의 65%·20스터드 반경은 보여 준다.
   const fs = fresh.getBoundingSphere(new THREE.Sphere());
   const vs = visible.getBoundingSphere(new THREE.Sphere());
-  const nearDist = fitRadius(Math.max(fs.radius * 2, vs.radius * 0.3, 100));
-  if (nearDist < wholeDist * 0.85) tweenCamera(fs.center, nearDist);
+  const nearDist = fitRadius(Math.max(fs.radius * 3, vs.radius * 0.65, 400));
+  if (nearDist < wholeDist * 0.7) tweenCamera(fs.center, nearDist);
   else tweenCamera(target, wholeDist);
 }
 
