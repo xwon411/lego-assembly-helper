@@ -148,6 +148,20 @@
     .prep .sheet { border-radius: 0; width: 100%; }
     .prep .plist { grid-template-columns: 1fr; }
   }
+  /* 처음 방문자 안내 */
+  .guide { position: fixed; inset: 0; z-index: 45; display: none; align-items: center; justify-content: center; background: rgba(29,27,24,.45); padding: 16px; }
+  .guide.on { display: flex; }
+  .guide .card { background: var(--panel); border-radius: 16px; width: min(440px, 100%); max-height: 100%; overflow-y: auto; padding: 20px 20px 16px; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  .guide h3 { margin: 0 0 4px; font-size: 18px; }
+  .guide .lead { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+  .guide ul { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 10px; }
+  .guide li { display: grid; grid-template-columns: 36px 1fr; gap: 10px; align-items: start; font-size: 14px; line-height: 1.4; }
+  .guide li .ic { width: 36px; height: 36px; border-radius: 10px; background: #fff3d6; display: grid; place-items: center; font-size: 18px; }
+  .guide li b { display: block; font-size: 14px; }
+  .guide li span.d { color: var(--muted); font-size: 13px; }
+  .guide .btn { width: 100%; height: 44px; }
+  .btn.icon { width: 36px; padding: 0; font-weight: 800; }
+  .chip.listening { background: #d8352a; color: #fff; border-color: #d8352a; }
   .drop {
     position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center;
     background: rgba(29,27,24,.55); color: #fff; font-size: 22px; font-weight: 700;
@@ -198,7 +212,12 @@
   .hide-sm { }
 
   /* ── 모바일 ── */
+  button, .btn, .chip, select, .pitem, input[type=range] { touch-action: manipulation; }
   @media (max-width: 820px) {
+    .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip { flex: none; }
+    .ctrl .btn { height: 48px; }
     .app {
       grid-template-columns: 1fr;
       grid-template-rows: auto minmax(0, 1fr) auto minmax(120px, 34dvh);
@@ -245,6 +264,7 @@
     </select>
     <button class="btn" id="bPrep" title="조립 전에 필요한 부품을 모두 꺼내서 확인">부품 준비</button>
     <div class="spacer"></div>
+    <button class="btn icon" id="bHelp" title="사용법" aria-label="사용법">?</button>
     <div class="stepbadge" id="stepBadge">– / –단계</div>
   </header>
 
@@ -261,6 +281,7 @@
         <option value="7000">속도: 아주 느리게</option>
       </select>
       <button class="chip" id="tStepCheck" aria-pressed="false" title="이번 단계 부품 목록에 체크 버튼 표시">부품 체크</button>
+      <button class="chip" id="tVoice" aria-pressed="false" title="&quot;다음&quot;, &quot;이전&quot;이라고 말해서 넘기기" hidden>🎤 음성</button>
     </div>
     <div class="toast" id="toast" role="status"><span id="toastText"></span><button id="toastClose" aria-label="닫기">×</button></div>
     <div class="resume" id="resume" role="status">
@@ -321,6 +342,21 @@
     <div class="body" id="prepBody"></div>
   </div>
 </div>
+<div class="guide" id="guide" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+  <div class="card">
+    <h3 id="guideTitle">이렇게 쓰면 돼요</h3>
+    <p class="lead">설계 파일(.ldr / .mpd)을 열면 한 단계씩 3D로 쌓아 가며 보여 줘요.</p>
+    <ul>
+      <li><span class="ic">🔄</span><div><b>돌려 보기</b><span class="d" data-touch="한 손가락으로 끌기" data-mouse="마우스 왼쪽 버튼으로 끌기"></span></div></li>
+      <li><span class="ic">🔍</span><div><b>확대 · 축소</b><span class="d" data-touch="두 손가락 벌리기 / 오므리기" data-mouse="마우스 휠"></span></div></li>
+      <li><span class="ic">✋</span><div><b>화면 옮기기</b><span class="d" data-touch="두 손가락으로 끌기" data-mouse="마우스 오른쪽 버튼으로 끌기"></span></div></li>
+      <li><span class="ic">▶</span><div><b>다음 단계</b><span class="d" data-touch="아래 &quot;다음 ▶&quot; 버튼, 또는 🎤 음성을 켜고 &quot;다음&quot;" data-mouse="&quot;다음 ▶&quot; 버튼이나 키보드 ← →, 또는 🎤 음성을 켜고 &quot;다음&quot;"></span></div></li>
+      <li><span class="ic">📍</span><div><b>부품 위치 찾기</b><span class="d" data-touch="아래 부품 목록을 누르면 모델에서 깜빡여요" data-mouse="오른쪽 부품 목록을 누르면 모델에서 깜빡여요"></span></div></li>
+      <li><span class="ic">🧺</span><div><b>부품 준비</b><span class="d" data-touch="조립 전에 부품을 꺼내 두고 하나씩 체크" data-mouse="조립 전에 부품을 꺼내 두고 하나씩 체크"></span></div></li>
+    </ul>
+    <button class="btn primary" id="guideOk">시작하기</button>
+  </div>
+</div>
 <div class="drop" id="drop"><div>여기에 .ldr / .mpd 파일을 놓으세요</div></div>
 
 <script type="module">
@@ -343,9 +379,24 @@ const FETCH_RETRIES = 2;          // 처음 1번 + 재시도 2번
 const netFailed = new Set();      // 재시도 후에도 못 받은 주소 (모델 하나 불러오는 동안)
 const nativeFetch = window.fetch.bind(window);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// 받은 부품 파일(없는 경로 404 포함)은 브라우저 Cache Storage에 보관 → 두 번째 방문부터 바로 열림.
+// 라이브러리를 바꾸면 이름의 버전을 올려서 비움.
+const PART_CACHE = 'lah-parts-v1';
+const THUMB_CACHE = 'lah-thumbs-v1';
+const cacheOpen = name => ('caches' in window ? caches.open(name).catch(() => null) : Promise.resolve(null));
 window.fetch = async (input, init = {}) => {
   const url = typeof input === 'string' ? input : input.url;
   if (!url.startsWith(LIB)) return nativeFetch(input, init);
+  const cache = await cacheOpen(PART_CACHE);
+  if (cache) {
+    const hit = await cache.match(url).catch(() => null);
+    if (hit) return hit;
+  }
+  const r = await fetchWithRetry(input, init, url);
+  if (cache && (r.status === 200 || r.status === 404)) cache.put(url, r.clone()).catch(() => {});
+  return r;
+};
+async function fetchWithRetry(input, init, url) {
   let lastErr;
   for (let attempt = 0; attempt <= FETCH_RETRIES; attempt++) {
     if (attempt) await sleep(700 * attempt * attempt); // 0.7초, 2.8초 뒤 다시
@@ -363,7 +414,7 @@ window.fetch = async (input, init = {}) => {
   }
   netFailed.add(url);
   throw lastErr;
-};
+}
 const ui = {
   view: $('view'), overlay: $('overlay'), ovTitle: $('ovTitle'), ovSub: $('ovSub'), spinner: $('spinner'),
   stepBadge: $('stepBadge'), slider: $('slider'), prev: $('bPrev'), next: $('bNext'), play: $('bPlay'),
@@ -645,6 +696,7 @@ function setModel(group, label, loader, missing, netFails = 0) {
   // 이전 모델 정리
   if (state.model) { scene.remove(state.model); disposeModel(state.model); }
   anims.length = 0; camTween = null;
+  clearArrows();
 
   group.rotation.x = Math.PI; // LDraw는 -Y가 위
   scene.add(group);
@@ -954,6 +1006,7 @@ function goTo(index, { animate = true, camera: moveCam = true } = {}) {
   }
 
   if (animate && forwardOne) dropIn(state.steps[index]);
+  showArrows(state.steps[index]);
   if (moveCam && state.autoCam) frameStep(index);
 
   updateUI();
@@ -1035,11 +1088,11 @@ function userMove(index, opts) {
 }
 
 let toastTimer = null;
-function showToast(msg) {
+function showToast(msg, ms = 8000) {
   $('toastText').textContent = msg;
   $('toast').classList.add('on');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(hideToast, 8000);
+  toastTimer = setTimeout(hideToast, ms);
 }
 function hideToast() { $('toast').classList.remove('on'); }
 $('toastClose').onclick = hideToast;
@@ -1087,12 +1140,58 @@ function dropIn(bricks) {
     const parent = b.parent;
     const wp = info.box.getCenter(new THREE.Vector3());
     const a = parent.worldToLocal(wp.clone());
-    const c = parent.worldToLocal(wp.clone().add(new THREE.Vector3(0, h, 0)));
+    // 끼우는 방향의 반대쪽에서 날아오게 (보통은 위에서 아래로, 옆으로 끼우는 부품은 옆에서)
+    const c = parent.worldToLocal(wp.clone().addScaledVector(insertDir(b), -h));
     const offset = c.sub(a);
     const from = info.basePos.clone().add(offset);
     b.position.copy(from);
     anims.push({ brick: b, from, to: info.basePos.clone(), start: now + i * stagger, dur: 620 });
   });
+}
+
+// ───────────────────────── 조립 방향 화살표 ─────────────────────────
+// LDraw 부품은 자기 좌표계에서 스터드가 -Y(위)를 향함 → 부품의 +Y 축을 월드로 돌린 방향이 "끼우는 방향".
+// 일반 브릭은 아래(↓), 옆으로 붙는 부품(SNOT)은 옆(→)을 가리킨다.
+function insertDir(brick) {
+  const q = new THREE.Quaternion();
+  brick.getWorldQuaternion(q);
+  const d = new THREE.Vector3(0, 1, 0).applyQuaternion(q).normalize();
+  // 거의 축에 맞으면 깔끔하게 맞춤
+  for (const k of ['x', 'y', 'z']) if (Math.abs(d[k]) > 0.985) { d.set(0, 0, 0); d[k] = Math.sign(new THREE.Vector3(0, 1, 0).applyQuaternion(q)[k]); }
+  return d;
+}
+const arrowGroup = new THREE.Group();
+arrowGroup.renderOrder = 10;
+scene.add(arrowGroup);
+const arrowMat = new THREE.MeshBasicMaterial({ color: 0xff7a00, transparent: true, opacity: 0.9, depthTest: false });
+const shaftGeo = new THREE.CylinderGeometry(1, 1, 1, 12);
+const headGeo = new THREE.ConeGeometry(1, 1, 16);
+function clearArrows() { arrowGroup.clear(); }
+function showArrows(bricks) {
+  clearArrows();
+  if (!state.highlight) return;
+  for (const b of bricks) {
+    const info = state.info.get(b);
+    const d = insertDir(b);
+    const size = info.box.getSize(new THREE.Vector3());
+    const center = info.box.getCenter(new THREE.Vector3());
+    const extent = (Math.abs(d.x) * size.x + Math.abs(d.y) * size.y + Math.abs(d.z) * size.z) / 2;
+    const len = THREE.MathUtils.clamp(size.length() * 0.45, 14, 44);
+    const headLen = len * 0.38, rShaft = len * 0.07, rHead = len * 0.2;
+    const tip = center.clone().addScaledVector(d, -(extent + 4));         // 부품 바로 앞
+    const tail = tip.clone().addScaledVector(d, -len);                     // 화살표 꼬리
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d);
+    const shaft = new THREE.Mesh(shaftGeo, arrowMat);
+    shaft.scale.set(rShaft, len - headLen, rShaft);
+    shaft.position.copy(tail).addScaledVector(d, (len - headLen) / 2);
+    shaft.quaternion.copy(q);
+    const head = new THREE.Mesh(headGeo, arrowMat);
+    head.scale.set(rHead, headLen, rHead);
+    head.position.copy(tip).addScaledVector(d, -headLen / 2);
+    head.quaternion.copy(q);
+    shaft.renderOrder = head.renderOrder = 10;
+    arrowGroup.add(shaft, head);
+  }
 }
 
 function fitRadius(radius) {
@@ -1262,19 +1361,38 @@ function initThumb() {
   thumbScene.environment = new THREE.PMREMGenerator(thumbR).fromScene(new RoomEnvironment(), 0.04).texture;
   thumbCam = new THREE.PerspectiveCamera(30, 1, 0.1, 10000);
 }
+let thumbDraining = false;
 function queueThumb(g, img) {
   thumbQueue.push({ g, img });
-  if (thumbQueue.length === 1) setTimeout(drainThumbs, 30);
+  if (!thumbDraining) { thumbDraining = true; setTimeout(drainThumbs, 30); }
 }
-function drainThumbs() {
-  const start = performance.now();
-  while (thumbQueue.length && performance.now() - start < 24) {
-    const { g, img } = thumbQueue.shift();
-    let url = thumbCache.get(g.key);
-    if (!url) { url = makeThumb(g.brick); thumbCache.set(g.key, url); }
-    img.src = url;
+// 썸네일도 Cache Storage에 보관 (부품 번호|색 코드 기준)
+const thumbKeyUrl = key => 'https://lah.local/thumb/' + encodeURIComponent(key);
+// 한 번에 하나의 처리만 돌고, 큐가 빌 때까지 이어서 처리 (부품 하나가 실패해도 나머지는 계속)
+async function drainThumbs() {
+  try {
+    const cache = await cacheOpen(THUMB_CACHE);
+    const start = performance.now();
+    while (thumbQueue.length && performance.now() - start < 24) {
+      const { g, img } = thumbQueue.shift();
+      if (!img.isConnected) continue; // 단계를 빨리 넘겨서 이미 사라진 목록은 건너뜀 (다시 보이면 다시 큐에 들어옴)
+      try {
+        let url = thumbCache.get(g.key);
+        if (!url && cache) {
+          const hit = await cache.match(thumbKeyUrl(g.key)).catch(() => null);
+          if (hit) { url = await hit.text(); thumbCache.set(g.key, url); }
+        }
+        if (!url) {
+          url = makeThumb(g.brick); thumbCache.set(g.key, url);
+          cache?.put(thumbKeyUrl(g.key), new Response(url)).catch(() => {});
+        }
+        img.src = url;
+      } catch (err) { console.warn('썸네일 실패', g.key, err); }
+    }
+  } finally {
+    if (thumbQueue.length) setTimeout(drainThumbs, 16);
+    else thumbDraining = false;
   }
-  if (thumbQueue.length) setTimeout(drainThumbs, 16);
 }
 function makeThumb(brick) {
   if (!thumbR) initThumb();
@@ -1489,7 +1607,7 @@ ui.speed.onchange = () => {
 window.addEventListener('keydown', e => {
   if (e.target.closest('input, select, textarea')) return;
   if (e.key === 'Escape' && $('prep').classList.contains('on')) { closePrep(); return; }
-  if ($('prep').classList.contains('on')) return;
+  if ($('prep').classList.contains('on') || $('guide').classList.contains('on')) return;
   if (e.key === 'ArrowRight') { stopPlay(); userMove(state.cur + 1); e.preventDefault(); }
   else if (e.key === 'ArrowLeft') { stopPlay(); userMove(state.cur - 1); e.preventDefault(); }
   else if (e.key === 'Home') { stopPlay(); goTo(0, { animate: false }); }
@@ -1540,6 +1658,78 @@ async function requestWakeLock() {
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state.model) requestWakeLock(); });
 
 // 첫 화면: 샘플 하나 자동으로 열기 (?sample=경로 로 다른 샘플 지정 가능)
+// ───────────────────────── 음성 "다음" / "이전" ─────────────────────────
+// Web Speech API (크롬·안드로이드·엣지). 아이폰 사파리는 지원하더라도 자주 끊김.
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const VOICE_NEXT = /다음|넥스트|next|넘겨|다음 단계/i;
+const VOICE_PREV = /이전|전으로|뒤로|back|previous|앞으로 가/i;
+let recog = null, lastVoice = 0;
+if (SR) $('tVoice').hidden = false;
+function startVoice() {
+  if (!SR) return;
+  recog = new SR();
+  recog.lang = 'ko-KR';
+  recog.continuous = true;
+  recog.interimResults = true;
+  recog.onresult = e => {
+    const r = e.results[e.results.length - 1];
+    const text = r[0].transcript.trim();
+    const now = Date.now();
+    if (now - lastVoice < 1200) return;            // 같은 말이 중간·최종 결과로 두 번 오는 것 방지
+    let cmd = null;
+    if (VOICE_PREV.test(text)) cmd = 'prev';
+    else if (VOICE_NEXT.test(text)) cmd = 'next';
+    if (!cmd) return;
+    lastVoice = now;
+    if ($('prep').classList.contains('on') || $('guide').classList.contains('on')) return;
+    stopPlay();
+    userMove(state.cur + (cmd === 'next' ? 1 : -1));
+    showToast(cmd === 'next' ? '🎤 다음' : '🎤 이전', 1200);
+  };
+  recog.onerror = e => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      stopVoice();
+      showToast('마이크 권한이 필요해요. 브라우저 주소창 옆에서 마이크를 허용해 주세요.', 6000);
+    }
+  };
+  // 크롬은 조용하면 저절로 멈춤 → 켜져 있는 동안 다시 시작
+  recog.onend = () => { if (state.voice) setTimeout(() => { try { recog?.start(); } catch {} }, 250); };
+  state.voice = true;
+  try { recog.start(); } catch {}
+  $('tVoice').setAttribute('aria-pressed', 'true');
+  $('tVoice').classList.add('listening');
+  $('tVoice').textContent = '🎤 듣는 중';
+  showToast('"다음", "이전"이라고 말해 보세요', 2500);
+}
+function stopVoice() {
+  state.voice = false;
+  try { recog?.stop(); } catch {}
+  recog = null;
+  $('tVoice').setAttribute('aria-pressed', 'false');
+  $('tVoice').classList.remove('listening');
+  $('tVoice').textContent = '🎤 음성';
+}
+$('tVoice').onclick = () => state.voice ? stopVoice() : startVoice();
+
+// ───────────────────────── 처음 방문자 안내 ─────────────────────────
+function openGuide() {
+  const touch = matchMedia('(pointer: coarse)').matches;
+  for (const el of document.querySelectorAll('#guide .d')) el.textContent = touch ? el.dataset.touch : el.dataset.mouse;
+  $('guide').classList.add('on');
+  $('guideOk').focus();
+}
+function closeGuide() {
+  $('guide').classList.remove('on');
+  try { localStorage.setItem('lah:guideSeen', '1'); } catch {}
+}
+$('guideOk').onclick = closeGuide;
+$('guide').addEventListener('click', e => { if (e.target === $('guide')) closeGuide(); });
+$('bHelp').onclick = openGuide;
+window.addEventListener('keydown', e => { if (e.key === 'Escape' && $('guide').classList.contains('on')) closeGuide(); });
+let guideSeen = false;
+try { guideSeen = localStorage.getItem('lah:guideSeen') === '1'; } catch {}
+if (!guideSeen) openGuide();
+
 const qs = new URLSearchParams(location.search);
 const first = qs.get('sample') || 'samples/car.mpd';
 $('sampleSelect').value = first;
@@ -1547,7 +1737,7 @@ resize();
 loadSample(first);
 
 // 디버그/테스트용
-window.__app = { state, goTo, userMove, scene, camera, netFailed, findParts, keyOf, liveElapsed, secPerPart, get blink() { return blink; } };
+window.__app = { state, goTo, userMove, arrowGroup, insertDir, thumbQueue, thumbCache, scene, camera, netFailed, findParts, keyOf, liveElapsed, secPerPart, get blink() { return blink; } };
 </script>
 </body>
 </html>
