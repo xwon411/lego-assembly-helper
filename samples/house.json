@@ -1,0 +1,36 @@
+{
+  "format": "lah-floorplan/1",
+  "name": "샘플 주택 (방 2 · 거실 · 주방)",
+  "unit": "m",
+  "wallHeight": 2.6,
+  "wallThickness": 0.2,
+  "walls": [
+    { "id": "front", "from": [0, 0],  "to": [10, 0], "exterior": true },
+    { "id": "right", "from": [10, 0], "to": [10, 8], "exterior": true },
+    { "id": "back",  "from": [10, 8], "to": [0, 8],  "exterior": true },
+    { "id": "left",  "from": [0, 8],  "to": [0, 0],  "exterior": true },
+    { "id": "mid",   "from": [0, 5],  "to": [10, 5], "thickness": 0.12 },
+    { "id": "lk",    "from": [6, 0],  "to": [6, 5],  "thickness": 0.12 },
+    { "id": "beds",  "from": [5, 5],  "to": [5, 8],  "thickness": 0.12 }
+  ],
+  "openings": [
+    { "type": "door",   "wall": "front", "offset": 2.2, "width": 1.0, "height": 2.1 },
+    { "type": "window", "wall": "front", "offset": 4.4, "width": 1.6, "height": 1.2, "sill": 0.9 },
+    { "type": "window", "wall": "front", "offset": 8.0, "width": 1.2, "height": 1.0, "sill": 1.1 },
+    { "type": "window", "wall": "right", "offset": 2.5, "width": 1.2, "height": 1.2, "sill": 0.9 },
+    { "type": "window", "wall": "right", "offset": 6.5, "width": 1.0, "height": 1.2, "sill": 0.9 },
+    { "type": "window", "wall": "back",  "offset": 2.5, "width": 1.4, "height": 1.2, "sill": 0.9 },
+    { "type": "window", "wall": "back",  "offset": 7.5, "width": 1.4, "height": 1.2, "sill": 0.9 },
+    { "type": "window", "wall": "left",  "offset": 5.5, "width": 1.6, "height": 1.2, "sill": 0.9 },
+    { "type": "door",   "wall": "lk",    "offset": 3.0, "width": 0.9, "height": 2.1 },
+    { "type": "door",   "wall": "mid",   "offset": 2.0, "width": 0.9, "height": 2.1 },
+    { "type": "door",   "wall": "mid",   "offset": 7.0, "width": 0.9, "height": 2.1 }
+  ],
+  "rooms": [
+    { "name": "거실", "polygon": [[0, 0], [6, 0], [6, 5], [0, 5]] },
+    { "name": "주방", "polygon": [[6, 0], [10, 0], [10, 5], [6, 5]] },
+    { "name": "침실 1", "polygon": [[0, 5], [5, 5], [5, 8], [0, 8]] },
+    { "name": "침실 2", "polygon": [[5, 5], [10, 5], [10, 8], [5, 8]] }
+  ],
+  "roof": { "type": "gable", "pitch": 28, "overhang": 0.4 }
+}

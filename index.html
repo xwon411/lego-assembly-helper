@@ -161,6 +161,25 @@
   .guide li span.d { color: var(--muted); font-size: 13px; }
   .guide .btn { width: 100%; height: 44px; }
   .btn.icon { width: 36px; padding: 0; font-weight: 800; }
+  /* 건축 모드 */
+  .house-only { display: none; }
+  body.house .house-only { display: inline-flex; align-items: center; }
+  body.house .lego-only { display: none !important; }
+  .labels { position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
+  .dim-label {
+    font-size: 11px; font-weight: 700; color: #3a2a00; background: rgba(255,255,255,.88);
+    border: 1px solid #f0c060; border-radius: 6px; padding: 2px 6px; white-space: nowrap;
+  }
+  .room-label {
+    font-size: 12px; color: var(--ink); background: rgba(255,255,255,.92); border: 1px solid var(--line);
+    border-radius: 8px; padding: 4px 8px; text-align: center; line-height: 1.3; white-space: nowrap;
+  }
+  .room-label b { display: block; font-size: 13px; }
+  @media (max-width: 820px) {
+    .dim-label { font-size: 10px; padding: 1px 4px; }
+    .room-label { font-size: 10px; padding: 2px 5px; }
+    .room-label b { font-size: 11px; }
+  }
   .chip.listening { background: #d8352a; color: #fff; border-color: #d8352a; }
   .drop {
     position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center;
@@ -255,14 +274,15 @@
   <header class="top">
     <div class="brand"><span class="logo" aria-hidden="true"></span><span class="label">레고 조립 도우미</span></div>
     <label class="btn primary" for="fileInput" title="LDraw 파일 열기 (.ldr / .mpd)">파일 열기</label>
-    <input id="fileInput" type="file" accept=".ldr,.mpd,.dat,.LDR,.MPD" hidden>
+    <input id="fileInput" type="file" accept=".ldr,.mpd,.dat,.json,.LDR,.MPD,.JSON" hidden>
     <select id="sampleSelect" class="btn" aria-label="샘플 모델 선택">
       <option value="">샘플 선택…</option>
       <option value="samples/car.mpd">자동차 (8단계)</option>
       <option value="samples/mini-construction.mpd">미니 굴착기 (40단계)</option>
       <option value="samples/lighthouse.mpd">등대 (STEP 없음 · 자동 분할)</option>
+      <option value="samples/house.json">🏠 샘플 주택 (건축 · 7단계)</option>
     </select>
-    <button class="btn" id="bPrep" title="조립 전에 필요한 부품을 모두 꺼내서 확인">부품 준비</button>
+    <button class="btn lego-only" id="bPrep" title="조립 전에 필요한 부품을 모두 꺼내서 확인">부품 준비</button>
     <div class="spacer"></div>
     <button class="btn icon" id="bHelp" title="사용법" aria-label="사용법">?</button>
     <div class="stepbadge" id="stepBadge">– / –단계</div>
@@ -280,7 +300,8 @@
         <option value="4000">속도: 느리게</option>
         <option value="7000">속도: 아주 느리게</option>
       </select>
-      <button class="chip" id="tStepCheck" aria-pressed="false" title="이번 단계 부품 목록에 체크 버튼 표시">부품 체크</button>
+      <button class="chip lego-only" id="tStepCheck" aria-pressed="false" title="이번 단계 부품 목록에 체크 버튼 표시">부품 체크</button>
+      <button class="chip house-only" id="tDims" aria-pressed="true" title="방 면적과 벽 길이 표시">치수·면적</button>
       <button class="chip" id="tVoice" aria-pressed="false" title="&quot;다음&quot;, &quot;이전&quot;이라고 말해서 넘기기" hidden>🎤 음성</button>
     </div>
     <div class="toast" id="toast" role="status"><span id="toastText"></span><button id="toastClose" aria-label="닫기">×</button></div>
@@ -310,11 +331,11 @@
     <div class="progress-label"><span id="progText">놓은 부품 0 / 0개</span><span id="progPct"></span></div>
     <div class="progress"><div id="progBar"></div></div>
     <div class="timing" id="timing" hidden><span id="elapsedText"></span><span id="etaText"></span></div>
-    <h2>이번 단계 부품 <span class="count" id="stepCount"></span></h2>
+    <h2><span id="stepTitle">이번 단계 부품</span> <span class="count" id="stepCount"></span></h2>
     <p class="hint">누르면 모델에서 위치가 깜빡여요</p>
     <ul class="plist findable" id="stepList"></ul>
     <details class="remain" id="remainBox">
-      <summary>남은 부품 <span class="count" id="remainCount"></span></summary>
+      <summary><span id="remainTitle">남은 부품</span> <span class="count" id="remainCount"></span></summary>
       <ul class="plist" id="remainList"></ul>
     </details>
     <p class="note">파일은 브라우저 안에서만 읽고 어디에도 업로드되지 않아요. BrickLink Studio에서는 <b>Export As → LDraw(.ldr/.mpd)</b>로 내보내면 됩니다. 키보드: ← → 단계 이동, 스페이스 자동재생.</p>
@@ -366,6 +387,7 @@ import { LDrawLoader } from 'three/addons/loaders/LDrawLoader.js';
 import { LDrawConditionalLineMaterial } from 'three/addons/materials/LDrawConditionalLineMaterial.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
 // 공식 LDraw 부품 라이브러리 (CORS 허용 미러)
 const LIB = 'https://raw.githubusercontent.com/gkjohnson/ldraw-parts-library/master/complete/ldraw/';
@@ -418,6 +440,7 @@ async function fetchWithRetry(input, init, url) {
 const ui = {
   view: $('view'), overlay: $('overlay'), ovTitle: $('ovTitle'), ovSub: $('ovSub'), spinner: $('spinner'),
   stepBadge: $('stepBadge'), slider: $('slider'), prev: $('bPrev'), next: $('bNext'), play: $('bPlay'),
+  stepTitle: $('stepTitle'),
   resume: $('resume'), resumeText: $('resumeText'), speed: $('speedSel'), ovRetry: $('ovRetry'),
   stepList: $('stepList'), remainList: $('remainList'), stepCount: $('stepCount'), remainCount: $('remainCount'),
   progText: $('progText'), progPct: $('progPct'), progBar: $('progBar'), warn: $('warn'), modelInfo: $('modelInfo'),
@@ -429,6 +452,10 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 ui.view.prepend(renderer.domElement);
+const labelRenderer = new CSS2DRenderer();
+const labelLayer = labelRenderer.domElement;
+labelLayer.className = 'labels';
+renderer.domElement.after(labelLayer);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xf4f1ea);
@@ -521,6 +548,7 @@ function frame(now) {
 
   const damping = controls.update();
   renderer.render(scene, camera);
+  if (state.mode === 'house') labelRenderer.render(scene, camera);
   if (busy || damping) requestRender();
 }
 const easeInOut = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
@@ -529,6 +557,7 @@ const easeOutBack = t => { const c1 = 1.2, c3 = c1 + 1; return 1 + c3 * Math.pow
 function resize() {
   const r = ui.view.getBoundingClientRect();
   renderer.setSize(r.width, r.height, false);
+  labelRenderer.setSize(r.width, r.height);
   camera.aspect = r.width / Math.max(1, r.height);
   camera.updateProjectionMatrix();
   requestRender();
@@ -553,6 +582,20 @@ async function loadFromText(text, label) {
   state.last = { text, label };
   state.progressKey = 'lah:progress:' + hashText(text);
   netFailed.clear();
+
+  // 평면도(JSON)면 건축 모드
+  if (/^\s*\{/.test(text)) {
+    try {
+      const plan = parsePlan(text);
+      const { group, warnings } = buildHouse(plan);
+      setModel(group, label || plan.name, null, [], 0, { house: true, plan, warnings });
+      hideOverlay();
+    } catch (err) {
+      console.error(err);
+      showOverlay('평면도를 읽지 못했어요', String(err?.message || err), false);
+    }
+    return;
+  }
 
   // 파일 안에 내장된 부품 이름 미리 수집 (packed .mpd)
   collectDescriptions(text);
@@ -692,28 +735,34 @@ function resolveColor(brick, loader) {
   };
 }
 
-function setModel(group, label, loader, missing, netFails = 0) {
+function setModel(group, label, loader, missing, netFails = 0, opts = {}) {
   // 이전 모델 정리
   if (state.model) { scene.remove(state.model); disposeModel(state.model); }
   anims.length = 0; camTween = null;
   clearArrows();
+  labelLayer.replaceChildren();
+  setMode(opts.house ? 'house' : 'lego');
+  state.plan = opts.plan || null;
 
-  group.rotation.x = Math.PI; // LDraw는 -Y가 위
+  if (!opts.house) group.rotation.x = Math.PI; // LDraw는 -Y가 위
   scene.add(group);
   group.updateMatrixWorld(true);
   state.model = group;
 
-  const bricks = collectBricks(group);
+  const bricks = opts.house ? collectElements(group) : collectBricks(group);
   state.bricks = bricks;
 
   // 부품별 정보
   for (const b of bricks) {
     const box = new THREE.Box3().setFromObject(b);
-    const c = resolveColor(b, loader);
-    state.info.set(b, {
+    const u = b.userData;
+    state.info.set(b, opts.house ? {
+      box, basePos: b.position.clone(),
+      partId: u.partId, colorCode: u.colorCode, colorHex: u.colorHex, colorName: u.colorName, meta: u.meta,
+    } : {
       box, basePos: b.position.clone(),
       partId: partIdOf(b.userData.fileName || b.name || '?'),
-      ...c,
+      ...resolveColor(b, loader),
     });
     b.traverse(o => { if (o.isMesh || o.isLineSegments) origMat.set(o, o.material); });
   }
@@ -731,7 +780,10 @@ function setModel(group, label, loader, missing, netFails = 0) {
   state.modelBox = all;
 
   // 경고
-  if (netFails) {
+  if (opts.warnings?.length) {
+    ui.warn.textContent = '평면도에서 고친 부분: ' + opts.warnings.slice(0, 4).join(' / ') + (opts.warnings.length > 4 ? ` 외 ${opts.warnings.length - 4}개` : '');
+    ui.warn.classList.add('on');
+  } else if (netFails) {
     ui.warn.textContent = `인터넷 연결이 불안정해서 부품 ${missing.length || netFails}종을 받지 못했어요. 빠진 채로 보여요.`;
     const b = document.createElement('button');
     b.className = 'btn'; b.textContent = '다시 시도'; b.onclick = retryLoad;
@@ -740,9 +792,11 @@ function setModel(group, label, loader, missing, netFails = 0) {
   } else if (missing.length) {
     ui.warn.textContent = `라이브러리에서 찾지 못한 부품 ${missing.length}종은 빠진 채로 보여요: ${missing.slice(0, 6).join(', ')}${missing.length > 6 ? ' 외' : ''}`;
     ui.warn.classList.add('on');
-  } else ui.warn.classList.remove('on');
+  } else { ui.warn.classList.remove('on'); ui.warn.textContent = ''; }
 
-  ui.modelInfo.textContent = `${label} · 부품 ${bricks.length}개 · ${state.steps.length}단계${state.autoSplit ? ' (층별 자동 분할)' : ''}`;
+  ui.modelInfo.textContent = opts.house
+    ? `${label} · 연면적 ${fmtArea(opts.plan.totalArea)} · ${state.steps.length}단계`
+    : `${label} · 부품 ${bricks.length}개 · ${state.steps.length}단계${state.autoSplit ? ' (층별 자동 분할)' : ''}`;
   ui.slider.max = Math.max(1, state.steps.length);
 
   // 시작 카메라: 전체 보기
@@ -754,6 +808,7 @@ function setModel(group, label, loader, missing, netFails = 0) {
   controls.update();
 
   if (!bricks.length) {
+    if (opts.house) { showOverlay('평면도에 벽이 없어요', 'walls 목록에 벽을 하나 이상 넣어 주세요.', false); return; }
     showOverlay('부품이 없는 파일이에요', '부품(.dat)을 참조하는 줄이 없거나 모두 찾지 못했어요.', false);
     return;
   }
@@ -767,6 +822,7 @@ function setModel(group, label, loader, missing, netFails = 0) {
   if (prev && !(prev.step > 0 && prev.step < state.steps.length && prev.total === state.steps.length)) restoreFrom(prev);
   state.cur = 0;
   state.resumePending = true;
+  if (opts.house) applyDims();
   goTo(0, { animate: false, camera: false });
   state.resumePending = false;
   offerResume(prev);
@@ -1007,6 +1063,7 @@ function goTo(index, { animate = true, camera: moveCam = true } = {}) {
 
   if (animate && forwardOne) dropIn(state.steps[index]);
   showArrows(state.steps[index]);
+  applyDims();
   if (moveCam && state.autoCam) frameStep(index);
 
   updateUI();
@@ -1048,7 +1105,7 @@ function fmtDur(ms) {
 function updateTiming() {
   const el = $('timing');
   const t = state.timing;
-  if (!t || !state.steps.length) { el.hidden = true; return; }
+  if (!t || !state.steps.length || state.mode === 'house') { el.hidden = true; return; }
   el.hidden = false;
   const elapsed = liveElapsed();
   const idle = t.last != null && Date.now() - t.last > IDLE_CAP;
@@ -1080,7 +1137,7 @@ function userMove(index, opts) {
       // 마지막 단계에 도착 → 이 단계 부품까지 끝낸 것으로 보고 완성 처리
       t.parts += state.steps[state.cur].length;
       t.done = true;
-      showToast(`완성! 총 ${fmtDur(t.elapsed)} 걸렸어요`);
+      showToast(state.mode === 'house' ? '🏠 시공 완료!' : `완성! 총 ${fmtDur(t.elapsed)} 걸렸어요`);
     }
     saveProgress();
     updateTiming();
@@ -1153,6 +1210,7 @@ function dropIn(bricks) {
 // LDraw 부품은 자기 좌표계에서 스터드가 -Y(위)를 향함 → 부품의 +Y 축을 월드로 돌린 방향이 "끼우는 방향".
 // 일반 브릭은 아래(↓), 옆으로 붙는 부품(SNOT)은 옆(→)을 가리킨다.
 function insertDir(brick) {
+  if (brick.userData.insertDir) return new THREE.Vector3(...brick.userData.insertDir);
   const q = new THREE.Quaternion();
   brick.getWorldQuaternion(q);
   const d = new THREE.Vector3(0, 1, 0).applyQuaternion(q).normalize();
@@ -1169,7 +1227,7 @@ const headGeo = new THREE.ConeGeometry(1, 1, 16);
 function clearArrows() { arrowGroup.clear(); }
 function showArrows(bricks) {
   clearArrows();
-  if (!state.highlight) return;
+  if (!state.highlight || state.mode === 'house') return;
   for (const b of bricks) {
     const info = state.info.get(b);
     const d = insertDir(b);
@@ -1311,7 +1369,7 @@ function renderList(el, groups, cls = '') {
     const meta = document.createElement('div');
     meta.className = 'meta';
     meta.innerHTML = `<span class="swatch" style="background:${g.info.colorHex}"></span>`;
-    meta.append(`${colorLabel(g.info.colorName)} · #${g.info.partId}`);
+    meta.append(g.info.meta ?? `${colorLabel(g.info.colorName)} · #${g.info.partId}`);
     mid.append(name, meta);
     const qty = document.createElement('div');
     qty.className = 'qty'; qty.textContent = '×' + g.n;
@@ -1442,15 +1500,18 @@ function updateUI() {
   const placed = state.steps.slice(0, i + 1).reduce((s, a) => s + a.length, 0);
   const total = state.bricks.length;
   const pct = total ? Math.round(placed / total * 100) : 0;
-  ui.progText.textContent = `놓은 부품 ${placed} / ${total}개`;
+  const unit = state.mode === 'house' ? '시공한 요소' : '놓은 부품';
+  ui.progText.textContent = `${unit} ${placed} / ${total}개`;
   ui.progBar.style.width = pct + '%';
 
   updateTiming();
   ui.stepCount.textContent = `${now.length}개`;
+  ui.stepTitle.textContent = state.mode === 'house' ? `이번 단계: ${now[0]?.userData.stepName || ''}` : '이번 단계 부품';
   renderList(ui.stepList, groupParts(now), 'new');
 
   const rest = state.steps.slice(i + 1).flat();
   ui.remainCount.textContent = `${rest.length}개`;
+  $('remainTitle').textContent = state.mode === 'house' ? '남은 요소' : '남은 부품';
   if ($('remainBox').open) renderList(ui.remainList, groupParts(rest));
   else ui.remainList.innerHTML = '';
 }
@@ -1618,8 +1679,8 @@ window.addEventListener('keydown', e => {
 // 파일 열기 / 드래그 앤 드롭 / 샘플
 async function openFile(file) {
   if (!file) return;
-  if (!/\.(ldr|mpd|dat)$/i.test(file.name)) {
-    showOverlay('지원하지 않는 파일이에요', '.ldr 또는 .mpd 파일을 열어 주세요. (Studio .io 파일은 LDraw로 내보낸 뒤 열기)', false);
+  if (!/\.(ldr|mpd|dat|json)$/i.test(file.name)) {
+    showOverlay('지원하지 않는 파일이에요', '.ldr / .mpd(레고) 또는 평면도 .json 파일을 열어 주세요. (Studio .io 파일은 LDraw로 내보낸 뒤 열기)', false);
     return;
   }
   $('sampleSelect').value = '';
@@ -1658,6 +1719,348 @@ async function requestWakeLock() {
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state.model) requestWakeLock(); });
 
 // 첫 화면: 샘플 하나 자동으로 열기 (?sample=경로 로 다른 샘플 지정 가능)
+// ───────────────────────── 건축 모드: 평면도 → 3D → 시공 단계 ─────────────────────────
+// 평면도 형식 (lah-floorplan/1, 단위 m) — README의 "평면도 형식" 참고
+//  walls:    [{ id, from:[x,y], to:[x,y], thickness?, exterior? }]
+//  openings: [{ type:'door'|'window', wall:id, offset(벽 시작점→개구부 중심, m), width, height, sill? }]
+//  rooms:    [{ name, polygon:[[x,y],...] }]
+//  roof:     { type:'gable'|'flat', pitch(도), overhang(m) }
+const M = 40;                 // 1 m = 40 화면 단위 (레고 모델과 비슷한 크기라 카메라 설정을 그대로 씀)
+const PYEONG = 3.305785;      // 1평 = 3.305785 ㎡
+const HOUSE_STEPS = ['기초 · 바닥', '골조 · 기둥', '골조 · 보', '외벽', '내벽', '창호 (문 · 창문)', '지붕'];
+const HOUSE_MATS = {
+  concrete: { name: '콘크리트', hex: '#b8b2a7' },
+  column:   { name: '구조재', hex: '#8d7b68' },
+  beam:     { name: '구조재', hex: '#7d6c5a' },
+  extWall:  { name: '외벽 마감', hex: '#ece5d8' },
+  intWall:  { name: '내벽 마감', hex: '#f7f5f0' },
+  frame:    { name: '문틀 · 창틀', hex: '#f2f2f0' },
+  door:     { name: '목재 문', hex: '#a77b56' },
+  glass:    { name: '유리', hex: '#9cc7e6', opacity: 0.45 },
+  roof:     { name: '지붕재', hex: '#7a3f32' },
+  gable:    { name: '외벽 마감', hex: '#e4dccd' },
+};
+const FLOOR_HEX = ['#e8d6b8', '#d5e2cf', '#d6dde9', '#ead8d3', '#e2dcef', '#efe6c8'];
+const houseMatCache = new Map();
+function houseMat(key, hex) {
+  const k = key + (hex || '');
+  if (!houseMatCache.has(k)) {
+    const d = HOUSE_MATS[key] || { hex };
+    houseMatCache.set(k, new THREE.MeshStandardMaterial({
+      color: hex || d.hex, roughness: 0.85, metalness: 0,
+      transparent: d.opacity != null, opacity: d.opacity ?? 1, side: d.opacity != null ? THREE.DoubleSide : THREE.FrontSide,
+    }));
+  }
+  return houseMatCache.get(k);
+}
+const edgeMat = new THREE.LineBasicMaterial({ color: 0x5c5448, transparent: true, opacity: 0.55 });
+const fmtM = v => (Math.round(v * 100) / 100).toString().replace(/\.0+$/, '') + ' m';
+const fmtArea = a => `${(Math.round(a * 10) / 10).toFixed(1)}㎡ (${(a / PYEONG).toFixed(1)}평)`;
+const polyArea = pts => Math.abs(pts.reduce((s, p, i) => { const q = pts[(i + 1) % pts.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0)) / 2;
+function polyCentroid(pts) {
+  let a = 0, cx = 0, cy = 0;
+  pts.forEach((p, i) => { const q = pts[(i + 1) % pts.length]; const f = p[0] * q[1] - q[0] * p[1]; a += f; cx += (p[0] + q[0]) * f; cy += (p[1] + q[1]) * f; });
+  if (Math.abs(a) < 1e-9) return [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length];
+  return [cx / (3 * a), cy / (3 * a)];
+}
+
+// JSON을 읽고 검사 + 기본값 채우기. 고칠 수 있는 문제는 고치고 warnings에 남김.
+function parsePlan(text) {
+  let raw;
+  try { raw = JSON.parse(text); } catch (e) { throw new Error('JSON 형식이 아니에요: ' + e.message); }
+  const warnings = [];
+  const num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d);
+  const pt = v => Array.isArray(v) && v.length >= 2 && v.every(isFinite) ? [+v[0], +v[1]] : null;
+  const H = THREE.MathUtils.clamp(num(raw.wallHeight, 2.6), 2, 6);
+  const T = THREE.MathUtils.clamp(num(raw.wallThickness, 0.2), 0.05, 0.6);
+  if (!Array.isArray(raw.walls) || !raw.walls.length) throw new Error('walls(벽 목록)가 비어 있어요.');
+  const walls = [];
+  raw.walls.forEach((w, i) => {
+    const from = pt(w.from), to = pt(w.to);
+    if (!from || !to) { warnings.push(`벽 ${w.id ?? i + 1}: 좌표가 없어 뺐어요`); return; }
+    const len = Math.hypot(to[0] - from[0], to[1] - from[1]);
+    if (len < 0.1) { warnings.push(`벽 ${w.id ?? i + 1}: 길이가 0이라 뺐어요`); return; }
+    walls.push({ id: String(w.id ?? 'w' + (i + 1)), from, to, len, thickness: THREE.MathUtils.clamp(num(w.thickness, T), 0.05, 0.6), exterior: !!w.exterior });
+  });
+  if (!walls.length) throw new Error('쓸 수 있는 벽이 없어요.');
+  // exterior가 하나도 표시 안 됐으면 바깥 테두리에 닿은 벽을 외벽으로 추정
+  if (!walls.some(w => w.exterior)) {
+    const xs = walls.flatMap(w => [w.from[0], w.to[0]]), ys = walls.flatMap(w => [w.from[1], w.to[1]]);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    const on = (a, b) => Math.abs(a - b) < 0.05;
+    for (const w of walls) {
+      w.exterior = (on(w.from[0], w.to[0]) && (on(w.from[0], x0) || on(w.from[0], x1))) ||
+                   (on(w.from[1], w.to[1]) && (on(w.from[1], y0) || on(w.from[1], y1)));
+    }
+  }
+  const byId = new Map(walls.map(w => [w.id, w]));
+  const openings = [];
+  (raw.openings || []).forEach((o, i) => {
+    const w = byId.get(String(o.wall));
+    if (!w) { warnings.push(`개구부 ${i + 1}: 벽 '${o.wall}'을 못 찾아 뺐어요`); return; }
+    const type = o.type === 'window' ? 'window' : 'door';
+    let width = THREE.MathUtils.clamp(num(o.width, type === 'door' ? 0.9 : 1.2), 0.3, w.len - 0.1);
+    let height = num(o.height, type === 'door' ? 2.1 : 1.2);
+    let sill = type === 'door' ? 0 : Math.max(0, num(o.sill, 0.9));
+    if (sill + height > H - 0.15) { height = Math.max(0.3, H - 0.15 - sill); warnings.push(`${type === 'door' ? '문' : '창'} ${i + 1}: 벽보다 높아서 줄였어요`); }
+    let offset = num(o.offset, w.len / 2);
+    const clamped = THREE.MathUtils.clamp(offset, width / 2 + 0.05, w.len - width / 2 - 0.05);
+    if (Math.abs(clamped - offset) > 0.01) warnings.push(`${type === 'door' ? '문' : '창'} ${i + 1}: 벽 밖으로 나가서 안쪽으로 옮겼어요`);
+    openings.push({ type, wall: w.id, offset: clamped, width, height, sill });
+  });
+  // 같은 벽에서 겹치는 개구부는 뒤의 것을 뺌
+  const kept = [];
+  for (const o of openings) {
+    const clash = kept.find(k => k.wall === o.wall && Math.abs(k.offset - o.offset) < (k.width + o.width) / 2 + 0.05);
+    if (clash) warnings.push(`'${o.wall}' 벽의 겹치는 ${o.type === 'door' ? '문' : '창'}을 뺐어요`); else kept.push(o);
+  }
+  const rooms = [];
+  (raw.rooms || []).forEach((r, i) => {
+    const poly = Array.isArray(r.polygon) ? r.polygon.map(pt).filter(Boolean) : [];
+    if (poly.length < 3) { warnings.push(`방 ${r.name ?? i + 1}: 꼭짓점이 부족해 뺐어요`); return; }
+    rooms.push({ name: String(r.name ?? `방 ${i + 1}`), polygon: poly, area: polyArea(poly) });
+  });
+  const rf = raw.roof || {};
+  const roof = {
+    type: rf.type === 'flat' ? 'flat' : rf.type === 'none' ? 'none' : 'gable',
+    pitch: THREE.MathUtils.clamp(num(rf.pitch, 28), 5, 55),
+    overhang: THREE.MathUtils.clamp(num(rf.overhang, 0.4), 0, 1.5),
+  };
+  // 연면적: 방이 있으면 방 합, 없으면 외벽 테두리 사각형
+  const xs = walls.flatMap(w => [w.from[0], w.to[0]]), ys = walls.flatMap(w => [w.from[1], w.to[1]]);
+  const bbox = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+  const totalArea = rooms.length ? rooms.reduce((s, r) => s + r.area, 0) : (bbox.x1 - bbox.x0) * (bbox.y1 - bbox.y0);
+  return { name: String(raw.name || '평면도'), H, T, walls, openings: kept, rooms, roof, bbox, totalArea, warnings };
+}
+
+// 요소 하나 = 시공 단계 하나에 속하는 Group (레고의 "부품"과 같은 역할)
+function houseElement(step, partId, desc, matKey, meshes, meta, colorHex) {
+  const g = new THREE.Group();
+  for (const m of meshes) {
+    g.add(m);
+    if (m.material.opacity === 1) {
+      const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 25), edgeMat);
+      e.position.copy(m.position); e.quaternion.copy(m.quaternion); e.scale.copy(m.scale);
+      g.add(e);
+    }
+  }
+  const d = HOUSE_MATS[matKey] || {};
+  Object.assign(g.userData, {
+    isElement: true, buildingStep: step, stepName: HOUSE_STEPS[step], partId,
+    colorCode: matKey + (colorHex || ''), colorHex: colorHex || d.hex, colorName: d.name || '바닥재',
+    meta: meta ?? (d.name || ''), insertDir: [0, -1, 0],
+  });
+  state.descMap.set(partId, desc);
+  return g;
+}
+const box = (w, h, d, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); return m; };
+function collectElements(root) { const out = []; root.traverse(o => { if (o.userData.isElement) out.push(o); }); return out; }
+
+function buildHouse(plan) {
+  const root = new THREE.Group();
+  const { H, walls, openings, rooms, roof, bbox } = plan;
+  const BEAM = 0.2;
+  const S = M;
+  // 벽 로컬 좌표: 시작점에서 x축 = 벽 방향, y = 위, z = 두께 방향
+  const wallFrame = (w, obj) => {
+    obj.position.set(w.from[0] * S, 0, w.from[1] * S);
+    obj.rotation.y = -Math.atan2(w.to[1] - w.from[1], w.to[0] - w.from[0]);
+    return obj;
+  };
+
+  // 0) 기초 + 바닥
+  const pad = 0.3;
+  const fw = bbox.x1 - bbox.x0 + pad * 2, fd = bbox.y1 - bbox.y0 + pad * 2;
+  root.add(houseElement(0, 'foundation', `기초 슬래브 ${fmtM(fw)} × ${fmtM(fd)}`, 'concrete',
+    [box(fw * S, 0.3 * S, fd * S, houseMat('concrete'), ((bbox.x0 + bbox.x1) / 2) * S, -0.15 * S, ((bbox.y0 + bbox.y1) / 2) * S)],
+    `콘크리트 · 두께 0.3 m`));
+  rooms.forEach((r, i) => {
+    const shape = new THREE.Shape(r.polygon.map(([x, y]) => new THREE.Vector2(x * S, y * S)));
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.03 * S, bevelEnabled: false });
+    geo.rotateX(Math.PI / 2);           // (x, y) → (x, 0, y), 두께는 아래로
+    geo.translate(0, 0.03 * S, 0);
+    const hex = FLOOR_HEX[i % FLOOR_HEX.length];
+    const el = houseElement(0, 'floor:' + r.name, `${r.name} 바닥`, 'floor', [new THREE.Mesh(geo, houseMat('floor', hex))], fmtArea(r.area), hex);
+    const [cx, cy] = polyCentroid(r.polygon);
+    const div = document.createElement('div');
+    div.className = 'room-label';
+    div.innerHTML = `<b></b><span></span>`;
+    div.querySelector('b').textContent = r.name;
+    div.querySelector('span').textContent = fmtArea(r.area);
+    const label = new CSS2DObject(div);
+    label.position.set(cx * S, 0.1 * S, cy * S);
+    label.userData.dimLabel = true;
+    el.add(label);
+    root.add(el);
+  });
+
+  // 1) 기둥: 벽 끝점 + 긴 벽은 3 m 간격 (문·창 자리는 피함)
+  const posts = new Map();
+  const addPost = (x, y) => { const k = `${x.toFixed(2)},${y.toFixed(2)}`; if (!posts.has(k)) posts.set(k, [x, y]); };
+  for (const w of walls) {
+    addPost(...w.from); addPost(...w.to);
+    const n = Math.floor(w.len / 3);
+    for (let i = 1; i <= n; i++) {
+      const t = (i * w.len) / (n + 1);
+      if (openings.some(o => o.wall === w.id && Math.abs(o.offset - t) < o.width / 2 + 0.2)) continue;
+      addPost(w.from[0] + (w.to[0] - w.from[0]) * t / w.len, w.from[1] + (w.to[1] - w.from[1]) * t / w.len);
+    }
+  }
+  const P = Math.max(...walls.map(w => w.thickness)) + 0.04;
+  for (const [x, y] of posts.values()) {
+    root.add(houseElement(1, 'column', `기둥 ${fmtM(P)} × ${fmtM(P)} × ${fmtM(H)}`, 'column',
+      [box(P * S, H * S, P * S, houseMat('column'), x * S, (H / 2) * S, y * S)], '구조재'));
+  }
+
+  // 2) 보: 벽 위
+  for (const w of walls) {
+    const g = wallFrame(w, new THREE.Group());
+    g.add(box(w.len * S, BEAM * S, (w.thickness + 0.02) * S, houseMat('beam'), (w.len / 2) * S, (H - BEAM / 2) * S, 0));
+    const el = houseElement(2, 'beam:' + w.len.toFixed(1), `보 ${fmtM(w.len)}`, 'beam', [], '구조재');
+    el.add(g);
+    for (const m of [...g.children]) {
+      const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 25), edgeMat);
+      e.position.copy(m.position); g.add(e);
+    }
+    root.add(el);
+  }
+
+  // 3·4) 벽: 문·창 자리를 비우고 조각으로
+  const wallLabelY = H + 0.35;
+  for (const w of walls) {
+    const ops = openings.filter(o => o.wall === w.id).sort((a, b) => a.offset - b.offset);
+    const mat = houseMat(w.exterior ? 'extWall' : 'intWall');
+    const top = H - BEAM;
+    const pieces = [];
+    const piece = (x0, x1, y0, y1) => { if (x1 - x0 > 0.01 && y1 - y0 > 0.01) pieces.push(box((x1 - x0) * S, (y1 - y0) * S, w.thickness * S, mat, ((x0 + x1) / 2) * S, ((y0 + y1) / 2) * S, 0)); };
+    let cur = 0;
+    for (const o of ops) {
+      const a = o.offset - o.width / 2, b = o.offset + o.width / 2;
+      piece(cur, a, 0, top);
+      piece(a, b, 0, o.sill);
+      piece(a, b, o.sill + o.height, top);
+      cur = b;
+    }
+    piece(cur, w.len, 0, top);
+    const g = wallFrame(w, new THREE.Group());
+    for (const m of pieces) {
+      g.add(m);
+      const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 25), edgeMat);
+      e.position.copy(m.position); g.add(e);
+    }
+    const nd = ops.filter(o => o.type === 'door').length, nw = ops.length - nd;
+    const kind = w.exterior ? '외벽' : '내벽';
+    const el = houseElement(w.exterior ? 3 : 4, `${w.exterior ? 'wall-ext' : 'wall-int'}:${w.len.toFixed(1)}:${nd}:${nw}`,
+      `${kind} ${fmtM(w.len)}` + (nd || nw ? ` (${[nd && `문 ${nd}`, nw && `창 ${nw}`].filter(Boolean).join(' · ')})` : ''),
+      w.exterior ? 'extWall' : 'intWall', [], `${HOUSE_MATS[w.exterior ? 'extWall' : 'intWall'].name} · 두께 ${fmtM(w.thickness)}`);
+    el.add(g);
+    // 벽 길이 라벨
+    const div = document.createElement('div');
+    div.className = 'dim-label';
+    div.textContent = fmtM(w.len);
+    const label = new CSS2DObject(div);
+    label.position.set(((w.from[0] + w.to[0]) / 2) * S, wallLabelY * S, ((w.from[1] + w.to[1]) / 2) * S);
+    label.userData.dimLabel = true;
+    el.add(label);
+    root.add(el);
+  }
+
+  // 5) 창호
+  openings.forEach(o => {
+    const w = walls.find(w => w.id === o.wall);
+    const g = wallFrame(w, new THREE.Group());
+    const fr = 0.06, d = w.thickness + 0.03;
+    const fm = houseMat('frame');
+    const cx = o.offset;
+    const parts = [
+      box(fr * S, o.height * S, d * S, fm, (cx - o.width / 2 + fr / 2) * S, (o.sill + o.height / 2) * S, 0),
+      box(fr * S, o.height * S, d * S, fm, (cx + o.width / 2 - fr / 2) * S, (o.sill + o.height / 2) * S, 0),
+      box(o.width * S, fr * S, d * S, fm, cx * S, (o.sill + o.height - fr / 2) * S, 0),
+    ];
+    if (o.type === 'window') {
+      parts.push(box(o.width * S, fr * S, d * S, fm, cx * S, (o.sill + fr / 2) * S, 0));
+      parts.push(box((o.width - fr * 2) * S, (o.height - fr * 2) * S, 0.01 * S, houseMat('glass'), cx * S, (o.sill + o.height / 2) * S, 0));
+    } else {
+      parts.push(box((o.width - fr * 2) * S, (o.height - fr) * S, 0.04 * S, houseMat('door'), cx * S, ((o.height - fr) / 2) * S, 0));
+    }
+    for (const m of parts) {
+      g.add(m);
+      if (m.material.opacity === 1) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 25), edgeMat); e.position.copy(m.position); g.add(e); }
+    }
+    const isDoor = o.type === 'door';
+    const el = houseElement(5, `${o.type}:${o.width.toFixed(2)}x${o.height.toFixed(2)}`,
+      `${isDoor ? '문' : '창문'} ${o.width.toFixed(2).replace(/0$/, '')} × ${o.height.toFixed(2).replace(/0$/, '')} m`,
+      isDoor ? 'door' : 'glass', [], isDoor ? '문틀 + 목재 문' : `창틀 + 유리 · 창턱 높이 ${fmtM(o.sill)}`);
+    el.add(g);
+    root.add(el);
+  });
+
+  // 6) 지붕
+  const half = Math.max(...walls.map(w => w.thickness)) / 2;
+  const X0 = bbox.x0 - half, X1 = bbox.x1 + half, Z0 = bbox.y0 - half, Z1 = bbox.y1 + half;
+  if (roof.type === 'flat') {
+    const o = roof.overhang;
+    root.add(houseElement(6, 'roof-flat', `평지붕 ${fmtM(X1 - X0 + 2 * o)} × ${fmtM(Z1 - Z0 + 2 * o)}`, 'roof',
+      [box((X1 - X0 + 2 * o) * S, 0.25 * S, (Z1 - Z0 + 2 * o) * S, houseMat('roof'), ((X0 + X1) / 2) * S, (H + 0.125) * S, ((Z0 + Z1) / 2) * S)], '지붕재'));
+  } else if (roof.type === 'gable') {
+    // 긴 쪽을 따라 용마루. 짧은 쪽이 경사 방향.
+    const alongX = (X1 - X0) >= (Z1 - Z0);
+    const L = alongX ? X1 - X0 : Z1 - Z0;          // 용마루 길이
+    const span = alongX ? Z1 - Z0 : X1 - X0;       // 경사 방향 폭
+    const p = THREE.MathUtils.degToRad(roof.pitch), o = roof.overhang, t = 0.15;
+    const rise = (span / 2) * Math.tan(p);
+    const slope = (span / 2 + o) / Math.cos(p);
+    const cx = (X0 + X1) / 2, cz = (Z0 + Z1) / 2;
+    const pivot = new THREE.Group();
+    pivot.position.set(cx * S, 0, cz * S);
+    if (!alongX) pivot.rotation.y = Math.PI / 2;
+    root.add(pivot);
+    const yEave = H - o * Math.tan(p), yRidge = H + rise;
+    for (const side of [-1, 1]) {
+      const m = box((L + 2 * o) * S, t * S, slope * S, houseMat('roof'), 0, ((yEave + yRidge) / 2 + t / 2) * S, side * ((span / 2 + o) / 2) * S);
+      m.rotation.x = side * p;
+      pivot.add(houseElement(6, 'roof-panel', `지붕판 ${fmtM(L + 2 * o)} × ${fmtM(slope)} (경사 ${roof.pitch}°)`, 'roof', [m], '지붕재'));
+    }
+    // 박공벽 (양 끝 삼각형)
+    for (const end of [-1, 1]) {
+      const sh = new THREE.Shape([new THREE.Vector2(-span / 2 * S, H * S), new THREE.Vector2(span / 2 * S, H * S), new THREE.Vector2(0, yRidge * S)]);
+      const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.2 * S, bevelEnabled: false });
+      geo.translate(0, 0, -0.1 * S);
+      geo.rotateY(Math.PI / 2);                    // 모양의 x → 경사 방향(z), 두께 → x
+      const m = new THREE.Mesh(geo, houseMat('gable'));
+      m.position.set(end * (L / 2 - 0.1) * S, 0, 0);
+      pivot.add(houseElement(6, 'gable', `박공벽 (높이 ${fmtM(rise)})`, 'gable', [m], '외벽 마감'));
+    }
+  }
+  return { group: root, warnings: plan.warnings };
+}
+
+// 모드 전환 (레고 / 건축)
+function setMode(mode) {
+  state.mode = mode;
+  document.body.classList.toggle('house', mode === 'house');
+  if (mode === 'house') {
+    try { state.dims = localStorage.getItem('lah:dims') !== '0'; } catch { state.dims = true; }
+    $('tDims').setAttribute('aria-pressed', state.dims);
+  }
+}
+// 치수 라벨: 켜져 있어도 지붕이 덮인 뒤에는 숨김 (라벨이 지붕 위에 떠서 어지러움)
+function applyDims() {
+  if (state.mode !== 'house') return;
+  const roofIdx = state.steps.findIndex(st => st[0]?.userData.buildingStep === 6);
+  const covered = roofIdx >= 0 && state.cur >= roofIdx;
+  const show = state.dims && !covered;
+  state.model?.traverse(o => { if (o.userData.dimLabel) o.visible = show; });
+  if (!show) labelLayer.querySelectorAll('.dim-label, .room-label').forEach(el => el.style.display = 'none');
+  requestRender();
+}
+$('tDims').onclick = () => {
+  state.dims = !state.dims;
+  $('tDims').setAttribute('aria-pressed', state.dims);
+  try { localStorage.setItem('lah:dims', state.dims ? '1' : '0'); } catch {}
+  applyDims();
+};
+
 // ───────────────────────── 음성 "다음" / "이전" ─────────────────────────
 // Web Speech API (크롬·안드로이드·엣지). 아이폰 사파리는 지원하더라도 자주 끊김.
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1737,7 +2140,7 @@ resize();
 loadSample(first);
 
 // 디버그/테스트용
-window.__app = { state, goTo, userMove, arrowGroup, insertDir, thumbQueue, thumbCache, scene, camera, netFailed, findParts, keyOf, liveElapsed, secPerPart, get blink() { return blink; } };
+window.__app = { state, goTo, userMove, parsePlan, buildHouse, arrowGroup, insertDir, thumbQueue, thumbCache, scene, camera, netFailed, findParts, keyOf, liveElapsed, secPerPart, get blink() { return blink; } };
 </script>
 </body>
 </html>
