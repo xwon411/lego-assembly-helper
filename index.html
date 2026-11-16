@@ -720,12 +720,14 @@ function dropIn(bricks) {
   });
 }
 
-function fitDistance(box) {
-  const sphere = box.getBoundingSphere(new THREE.Sphere());
+function fitRadius(radius) {
   const vFov = THREE.MathUtils.degToRad(camera.fov);
   const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
   const fov = Math.min(vFov, hFov);
-  return Math.max(40, sphere.radius / Math.sin(fov / 2) * 1.08);
+  return Math.max(40, radius / Math.sin(fov / 2) * 1.08);
+}
+function fitDistance(box) {
+  return fitRadius(box.getBoundingSphere(new THREE.Sphere()).radius);
 }
 
 function tweenCamera(target, dist, dur = 650) {
@@ -739,14 +741,23 @@ function tweenCamera(target, dist, dur = 650) {
 }
 
 function frameStep(index) {
-  // 지금까지 보이는 부품 전체가 화면에 들어오게 하되, 중심은 새 부품 쪽으로 당김
   const visible = new THREE.Box3(), fresh = new THREE.Box3();
   for (let i = 0; i <= index; i++) for (const b of state.steps[i]) visible.union(state.info.get(b).box);
   for (const b of state.steps[index]) fresh.union(state.info.get(b).box);
+
+  // 기본: 지금까지 보이는 부품 전체가 화면에 들어오게 하되, 중심은 새 부품 쪽으로 당김
   const target = visible.getCenter(new THREE.Vector3()).lerp(fresh.getCenter(new THREE.Vector3()), 0.45);
   // 중심이 이동한 만큼 여유를 줘서 전체가 잘리지 않게
   const shift = target.distanceTo(visible.getCenter(new THREE.Vector3()));
-  tweenCamera(target, fitDistance(visible) + shift * 1.2);
+  const wholeDist = fitDistance(visible) + shift * 1.2;
+
+  // 새 부품이 전체에 비해 작으면(넓은 모델) 새 부품 쪽으로 확대.
+  // 주변이 어디인지 알 수 있게 새 부품 크기의 2배, 최소한 전체의 30%·5스터드 반경은 보여 준다.
+  const fs = fresh.getBoundingSphere(new THREE.Sphere());
+  const vs = visible.getBoundingSphere(new THREE.Sphere());
+  const nearDist = fitRadius(Math.max(fs.radius * 2, vs.radius * 0.3, 100));
+  if (nearDist < wholeDist * 0.85) tweenCamera(fs.center, nearDist);
+  else tweenCamera(target, wholeDist);
 }
 
 function fitAll() {
