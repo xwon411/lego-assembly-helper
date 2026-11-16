@@ -228,6 +228,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { LDrawLoader } from 'three/addons/loaders/LDrawLoader.js';
 import { LDrawConditionalLineMaterial } from 'three/addons/materials/LDrawConditionalLineMaterial.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // 공식 LDraw 부품 라이브러리 (CORS 허용 미러)
 const LIB = 'https://raw.githubusercontent.com/gkjohnson/ldraw-parts-library/master/complete/ldraw/';
@@ -354,7 +355,9 @@ async function loadFromText(text, label) {
   const loader = new LDrawLoader(manager);
   loader.setConditionalLineMaterial(LDrawConditionalLineMaterial);
   loader.setPartsLibraryPath(LIB);
-  loader.smoothNormals = true;
+  // 로더 내장 smoothNormals는 스터드가 많은 부품(48×48 베이스플레이트 등)에서 수십 초가 걸려서 끄고,
+  // 불러온 뒤에 가벼운 방식(꺾인 각도 기준)으로 곡면만 부드럽게 만든다.
+  loader.smoothNormals = false;
 
   const missing = new Set();
   const warn = console.warn;
@@ -371,6 +374,7 @@ async function loadFromText(text, label) {
     const group = await new Promise((res, rej) => loader.parse(text, res, rej));
     if (token !== state.loadToken) return;
     console.warn = warn;
+    smoothGeometries(group);
     setModel(group, label, loader, [...missing]);
     hideOverlay();
   } catch (err) {
@@ -379,6 +383,15 @@ async function loadFromText(text, label) {
     console.error(err);
     showOverlay('모델을 불러오지 못했어요', String(err?.message || err), false);
   }
+}
+
+const smoothed = new WeakSet();
+function smoothGeometries(root) {
+  root.traverse(o => {
+    if (!o.isMesh || smoothed.has(o.geometry)) return;
+    smoothed.add(o.geometry);
+    toCreasedNormals(o.geometry, THREE.MathUtils.degToRad(35));
+  });
 }
 
 function collectDescriptions(text) {
