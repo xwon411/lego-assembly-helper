@@ -544,23 +544,101 @@ function buildSteps(bricks) {
       layers.get(y).push(b);
     }
     steps = [];
+    let ref = null; // 직전 단계의 중심 — 다음 단계는 그 근처에서 이어감
     for (const y of [...layers.keys()].sort((a, b) => a - b)) {
       const layer = layers.get(y);
-      if (layer.length <= 10) { steps.push(layer); continue; }
-      // 한 층에 부품이 많으면 앞→뒤, 왼→오 순으로 잘라서 여러 단계로
-      layer.sort((a, b) => {
-        const A = state.info.get(a).box, B = state.info.get(b).box;
-        return (A.min.z - B.min.z) || (A.min.x - B.min.x);
-      });
-      const chunks = Math.ceil(layer.length / 8);
-      const per = Math.ceil(layer.length / chunks);
-      for (let i = 0; i < layer.length; i += per) steps.push(layer.slice(i, i + per));
+      // 한 층에 부품이 많으면 가까운 부품끼리 묶어서 여러 단계로
+      const groups = layer.length <= 10 ? [layer] : clusterLayer(layer, ref);
+      for (const g of groups) steps.push(g);
+      ref = centerXZ(groups[groups.length - 1]);
     }
   }
 
   state.steps = steps;
   state.stepOf.clear();
   steps.forEach((arr, i) => arr.forEach(b => state.stepOf.set(b, i)));
+}
+
+function centerXZ(bricks) {
+  let x = 0, z = 0;
+  for (const b of bricks) { const bx = state.info.get(b).box; x += (bx.min.x + bx.max.x) / 2; z += (bx.min.z + bx.max.z) / 2; }
+  return { x: x / bricks.length, z: z / bricks.length };
+}
+
+// 같은 층의 부품을 "붙어 있거나 가까운 것끼리" 한 단계로 묶는다.
+//  1) 서로 가까운(GAP 이내) 부품들을 덩어리로 나누고
+//  2) 덩어리가 크면 한 단계 최대 MAX개가 되도록 옆으로 번져 가며 자르고
+//  3) 직전 단계에서 가까운 곳부터 이어서 진행한다.
+function clusterLayer(layer, ref) {
+  const MAX = 8;   // 한 단계 최대 부품 수
+  const GAP = 30;  // 이 거리(LDU, 1.5스터드) 안이면 이웃으로 봄
+  const items = layer.map(b => {
+    const bx = state.info.get(b).box;
+    return { b, bx, x: (bx.min.x + bx.max.x) / 2, z: (bx.min.z + bx.max.z) / 2, comp: -1 };
+  });
+  const gap = (p, q) => Math.hypot(
+    Math.max(0, p.bx.min.x - q.bx.max.x, q.bx.min.x - p.bx.max.x),
+    Math.max(0, p.bx.min.z - q.bx.max.z, q.bx.min.z - p.bx.max.z));
+  const dist = (it, pt) => Math.hypot(it.x - pt.x, it.z - pt.z);
+
+  // 1) 덩어리(연결 요소) 나누기
+  const comps = [];
+  for (const start of items) {
+    if (start.comp >= 0) continue;
+    const id = comps.length, comp = [start], queue = [start];
+    start.comp = id;
+    while (queue.length) {
+      const cur = queue.pop();
+      for (const it of items) if (it.comp < 0 && gap(cur, it) <= GAP) { it.comp = id; comp.push(it); queue.push(it); }
+    }
+    comps.push(comp);
+  }
+
+  // 시작점이 없으면(맨 아래층) 뒤쪽 왼편 구석부터
+  if (!ref) {
+    const box = new THREE.Box3();
+    for (const it of items) box.union(it.bx);
+    ref = { x: box.min.x, z: box.min.z };
+  }
+
+  const clusters = [];
+  const pending = new Set(comps);
+  while (pending.size) {
+    // 2) 지금 위치에서 가장 가까운 덩어리부터
+    let comp = null, best = Infinity;
+    for (const c of pending) for (const it of c) { const d = dist(it, ref); if (d < best) { best = d; comp = c; } }
+    pending.delete(comp);
+
+    const left = new Set(comp);
+    const target = Math.ceil(comp.length / Math.ceil(comp.length / MAX)); // 9개면 8+1이 아니라 5+4
+    while (left.size) {
+      let seed = null; best = Infinity;
+      for (const it of left) { const d = dist(it, ref); if (d < best) { best = d; seed = it; } }
+      const cl = [seed]; left.delete(seed);
+      while (cl.length < target && left.size) {
+        const c = { x: cl.reduce((s, m) => s + m.x, 0) / cl.length, z: cl.reduce((s, m) => s + m.z, 0) / cl.length };
+        let pick = null; best = Infinity;
+        for (const it of left) {
+          if (!cl.some(m => gap(it, m) <= GAP)) continue;
+          const d = dist(it, c);
+          if (d < best) { best = d; pick = it; }
+        }
+        if (!pick) break;
+        cl.push(pick); left.delete(pick);
+      }
+      clusters.push(cl);
+      ref = { x: cl.reduce((s, m) => s + m.x, 0) / cl.length, z: cl.reduce((s, m) => s + m.z, 0) / cl.length };
+    }
+  }
+
+  // 3) 한두 개짜리 자잘한 단계가 연달아 나오면 합침 (예: 네 귀퉁이 기둥 → 한 단계)
+  const out = [];
+  for (const cl of clusters) {
+    const last = out[out.length - 1];
+    if (last && last.small && cl.length <= 3 && last.length + cl.length <= MAX) last.push(...cl);
+    else { cl.small = cl.length <= 3; out.push(cl); }
+  }
+  return out.map(cl => cl.map(it => it.b));
 }
 
 // ───────────────────────── 머티리얼 변형 ─────────────────────────
