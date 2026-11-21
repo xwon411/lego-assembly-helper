@@ -162,11 +162,19 @@ def main(save=False):
         colors.append(np.array([hash(b['color']) for b in d['bricks']]))
         prepare(m)
     rows = []
+    FOLDS = int(os.environ.get('FOLDS', '0')) or len(models)   # 0 = 모델 하나씩 빼기
+    rng = np.random.RandomState(0); fold_of = rng.permutation(len(models)) % FOLDS
+    cache = [train_rows(m, colors[i]) for i, m in enumerate(models)]
+    fitted = {}
     for k, test in enumerate(models):
-        data = [train_rows(m, colors[i]) for i, m in enumerate(models) if i != k]
-        X = np.vstack([d[0] for d in data]); y = np.concatenate([d[1] for d in data]); w = np.concatenate([d[2] for d in data]); w = w / w.mean()
-        lr = LogisticRegression(C=1.0, max_iter=3000).fit(X, y, sample_weight=w)
-        gb = HistGradientBoostingClassifier(max_iter=200, learning_rate=0.1, max_leaf_nodes=15, random_state=0).fit(X, y, sample_weight=w)
+        fk = fold_of[k]
+        if fk not in fitted:
+            data = [cache[i] for i in range(len(models)) if fold_of[i] != fk]
+            X = np.vstack([d[0] for d in data]); y = np.concatenate([d[1] for d in data]); w = np.concatenate([d[2] for d in data]); w = w / w.mean()
+            fitted[fk] = (LogisticRegression(C=1.0, max_iter=3000).fit(X, y, sample_weight=w),
+                          HistGradientBoostingClassifier(max_iter=200, learning_rate=0.1, max_leaf_nodes=15, random_state=0).fit(X, y, sample_weight=w))
+        lr, gb = fitted[fk]
+        data = None
         col = colors[k]
         r = dict(name=test['name'], n=len(test['truth']),
                  rule=pair_acc(test['heur'], test['truth']),
@@ -178,7 +186,7 @@ def main(save=False):
         print(f"{r['name'][:26]:26s} n={r['n']:5d} | 순서 규칙 {r['rule']:.3f} LR {r['lr']:.3f} GB {r['gb']:.3f} | 다음부품 무작위 {r['hit_rand']:.2f} 규칙 {r['hit_rule']:.2f} LR {r['hit_lr']:.2f} GB {r['hit_gb']:.2f}", flush=True)
     keys = ['rule', 'lr', 'gb', 'hit_rand', 'hit_rule', 'hit_lr', 'hit_gb']
     print('평균', {k: round(float(np.mean([r[k] for r in rows])), 3) for k in keys})
-    json.dump(rows, open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'results_next2.json'), 'w'), ensure_ascii=False, indent=1)
+    json.dump(rows, open(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.environ.get('OUT','results_next3.json')), 'w'), ensure_ascii=False, indent=1)
 
 
 if __name__ == '__main__':

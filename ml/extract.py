@@ -6,14 +6,15 @@ from playwright.async_api import async_playwright
 ROOT='/home/claude/lego-assembly-helper'; T3='/tmp/t3/node_modules/three/'
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self,*a): pass
-srv=http.server.ThreadingHTTPServer(('127.0.0.1',8820), functools.partial(Q, directory=ROOT))
+SHARD=int(os.environ.get('SHARD','0')); NSH=int(os.environ.get('NSHARD','1')); PORT=8820+SHARD
+srv=http.server.ThreadingHTTPServer(('127.0.0.1',PORT), functools.partial(Q, directory=ROOT))
 threading.Thread(target=srv.serve_forever,daemon=True).start()
 DUMP='''(()=>{const s=__app.state; return s.bricks.map(b=>{const i=s.info.get(b); const bx=i.box;
   return {part:i.partId, color:String(i.colorCode), min:bx.min.toArray().map(v=>+v.toFixed(2)), max:bx.max.toArray().map(v=>+v.toFixed(2)), step:s.stepOf.get(b)}})})()'''
 async def load(pg, text, label):
     await pg.evaluate("([t,l])=>{ window.__done=false; __app.state.steps=[]; }", [text,label])
     await pg.evaluate("([t,l])=>__app.loadFromText(t,l)", [text,label])
-    await pg.wait_for_function("__app.state.steps.length>0 && !document.getElementById('overlay').classList.contains('on')", timeout=600000)
+    await pg.wait_for_function("__app.state.steps.length>0 && !document.getElementById('overlay').classList.contains('on')", timeout=int(os.environ.get('TMO','600000')))
     return await pg.evaluate(DUMP)
 async def main():
     async with async_playwright() as p:
@@ -25,16 +26,20 @@ async def main():
         ctx=await b.new_context(viewport={'width':800,'height':600}); await ctx.add_init_script("localStorage.setItem('lah:guideSeen','1')")
         pg=await ctx.new_page(); errs=[]; pg.on('pageerror', lambda e: errs.append(str(e)[:200]))
         await pg.route('https://cdn.jsdelivr.net/**', route)
-        await pg.goto('http://127.0.0.1:8820/index.html?sample=samples/car.mpd')
+        await pg.goto('http://127.0.0.1:'+str(PORT)+'/index.html?sample=samples/car.mpd')
         await pg.wait_for_function("window.__app && __app.state.steps.length>0", timeout=120000)
-        for f in sorted(glob.glob('/tmp/ml/raw/*.mpd')):
+        for i,f in enumerate(sorted(glob.glob('/tmp/ml/raw/*.mpd'))):
+            if i%NSH!=SHARD: continue
             name=os.path.basename(f).split('.')[0]
             out=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'feat', f'{name}.json')
             if os.path.exists(out): continue
             text=open(f,encoding='utf-8',errors='replace').read()
-            truth=await load(pg,text,name)
-            nostep=re.sub(r'^0 (STEP|ROTSTEP).*$','',text,flags=re.M)
-            heur=await load(pg,nostep,name+'-nostep')
+            try:
+                truth=await load(pg,text,name)
+                nostep=re.sub(r'^0 (STEP|ROTSTEP).*$','',text,flags=re.M)
+                heur=await load(pg,nostep,name+'-nostep')
+            except Exception as e:
+                print('SKIP',name,str(e)[:80],flush=True); await pg.close(); pg=await ctx.new_page(); await pg.route('https://cdn.jsdelivr.net/**', route); await pg.goto('http://127.0.0.1:'+str(PORT)+'/index.html?sample=samples/car.mpd'); await pg.wait_for_function('window.__app && __app.state.steps.length>0', timeout=120000); continue
             same = len(truth)==len(heur) and all(a['part']==b['part'] and a['min']==b['min'] for a,b in zip(truth,heur))
             for a,b2 in zip(truth,heur): a['heur']=b2['step']
             json.dump({'name':name,'bricks':truth,'aligned':same}, open(out,'w'))
