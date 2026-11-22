@@ -20,7 +20,7 @@ PORT = 8765
 EXPECT = {  # 샘플별 기대 단계 수
     'samples/car.mpd': 8,
     'samples/mini-construction.mpd': 40,
-    'samples/lighthouse.mpd': 12,
+    'samples/lighthouse.mpd': 13,   # STEP 없음 → AI 순서 (규칙 방식이면 12)
 }
 READY = "window.__app && __app.state.steps.length>0 && !document.getElementById('overlay').classList.contains('on')"
 
