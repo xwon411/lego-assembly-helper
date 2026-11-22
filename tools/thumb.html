@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>썸네일 생성 (개발용)</title>
 <!-- 갤러리 카드용 완성 모델 그림을 만드는 도구. tools/make_thumbs.py가 헤드리스로 연다. 앱과 같은 로더 설정. -->
-<style>html,body{margin:0;background:#dce6ee}canvas{display:block}</style>
+<style>html,body{margin:0;background:#f2f4f6}canvas{display:block}</style>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
@@ -22,7 +22,7 @@ const LIB = 'https://raw.githubusercontent.com/gkjohnson/ldraw-parts-library/mas
 const W = 480, H = 360;
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(1); renderer.setSize(W, H);
-renderer.setClearColor(0xdce6ee, 1);
+renderer.setClearColor(0xf2f4f6, 1);
 document.body.append(renderer.domElement);
 const scene = new THREE.Scene();
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8a96a3, 2.2));
