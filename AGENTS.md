@@ -22,7 +22,11 @@
 - three.js `0.170.0`을 jsDelivr importmap으로 로드 (`three`, `three/addons/`).
 - 부품 모양: 공식 LDraw 부품 라이브러리 미러 `https://raw.githubusercontent.com/gkjohnson/ldraw-parts-library/master/complete/ldraw/` (CORS 허용). 상수 `LIB`.
 - `samples/`: `car.mpd`(8단계), `mini-construction.mpd`(40단계), `lighthouse.mpd`(STEP 없음 → 자동 분할). 부품 내장(packed)이라 라이브러리 요청 없이 열림.
-- `?sample=samples/lighthouse.mpd` 처럼 첫 화면 샘플 지정 가능.
+- `?sample=samples/lighthouse.mpd` 처럼 첫 화면 샘플 지정 가능. 아무것도 없으면 **세트 갤러리**가 첫 화면.
+- `sets/`: 세트 갤러리 데이터 (LDraw 공식 모델 저장소 OMR 1,472세트). `catalog.json`(세트·모델 목록, 부품·단계 수, 제작자), `m/<id>.mpd.gz`(모델, gzip — 앱이 `DecompressionStream`으로 풂), `t/<id>.webp`(썸네일). `?set=<모델 id>`로 바로 열기.
+  - 만드는 법: 브라우저로 받은 묶음 → `python3 tools/build_catalog.py extract <묶음...>` → `python3 tools/make_thumbs.py /tmp/ml/gal/thumbs /tmp/ml/gal/src/*.mpd`(썸네일 + 앱과 같은 기준의 부품·단계 수) → `python3 tools/build_catalog.py assemble`
+  - OMR 파일은 CCAL 2.0(CC BY 2.0). 제작자를 세트 열 때 모델 정보 줄에 표시함 — 지우지 말 것
+- `ml/`: 조립 순서 학습 (STEP 없는 파일은 AI가 순서를 정함, `ml/README.md`)
 - 글꼴: Pretendard(jsDelivr, 비동기 로드 — 안 와도 시스템 글꼴로 표시).
 - 디버그용 전역: `window.__app` (state, goTo, userMove, scene, camera, …) — 테스트가 씀, 지우지 말 것.
 
@@ -79,6 +83,9 @@ python3 tests/smoke.py                      # 샘플 3종 × 데스크톱/폰 �
 - `design/manual-style` 브랜치: 조립 설명서풍 디자인 (이 파일과 `tests/smoke.py`가 함께 들어감).
 - 건축 브랜치 `feat/stage3-architecture`, `feat/plan-image-ai`는 버리기로 함 (사용자가 GitHub에서 지울 예정).
 - 진행 기록: claude.ai 프로젝트 문서 `claude/진행상황.md`, 발표 자료용 정리 `claude/발표용_고민정리.md`.
+
+- PR #8: STEP 없는 파일 AI 조립 순서 (65세트 학습). 세트 갤러리(설명서 표지 카드, 사용자가 시안 B 선택)는 `feat/gallery`.
+- **이 프로젝트는 기말 발표(11/27)용 일회성.** 폰 대응은 신경 쓰지 않아도 됨(사용자 결정). 우선순위: ① 교수님께 노력이 보이게 ② 학우들에게 "이런 것까지 되는구나".
 
 ## 7. 남은 일
 - 실제 폰(안드로이드 크롬/아이폰 사파리)에서 음성·터치·새 디자인 확인
