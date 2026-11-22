@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>썸네일 생성 (개발용)</title>
+<!-- 갤러리 카드용 완성 모델 그림을 만드는 도구. tools/make_thumbs.py가 헤드리스로 연다. 앱과 같은 로더 설정. -->
+<style>html,body{margin:0;background:#dce6ee}canvas{display:block}</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { LDrawLoader } from 'three/addons/loaders/LDrawLoader.js';
+import { LDrawConditionalLineMaterial } from 'three/addons/materials/LDrawConditionalLineMaterial.js';
+import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
+
+const LIB = 'https://raw.githubusercontent.com/gkjohnson/ldraw-parts-library/master/complete/ldraw/';
+const W = 480, H = 360;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+renderer.setClearColor(0xdce6ee, 1);
+document.body.append(renderer.domElement);
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a96a3, 2.2));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(-1, 2, 1.4); scene.add(sun);
+const camera = new THREE.PerspectiveCamera(32, W / H, 1, 1e6);
+let materialsReady = null;
+
+window.renderModel = async text => {
+  const loader = new LDrawLoader();
+  loader.setConditionalLineMaterial(LDrawConditionalLineMaterial);
+  loader.setPartsLibraryPath(LIB);
+  loader.smoothNormals = false;
+  const pc = loader.partsCache.parseCache, fd = pc.fetchData.bind(pc);
+  pc.fetchData = async f => { try { return await fd(f); } catch { return '0 (missing)\n0 !LDRAW_ORG Primitive\n'; } };
+  await loader.preloadMaterials(LIB + 'LDConfig.ldr');
+  const group = await new Promise((res, rej) => loader.parse(text, res, rej));
+  group.rotation.x = Math.PI;
+  group.traverse(o => { if (o.isMesh) toCreasedNormals(o.geometry, THREE.MathUtils.degToRad(35)); if (o.isLineSegments) o.visible = false; });
+  scene.add(group); group.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(group);
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const dir = new THREE.Vector3(0.75, 0.62, 1).normalize();
+  const dist = sphere.radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * 0.78;
+  camera.position.copy(sphere.center).addScaledVector(dir, dist);
+  camera.near = dist / 100; camera.far = dist * 10; camera.updateProjectionMatrix();
+  camera.lookAt(sphere.center);
+  renderer.render(scene, camera);
+  const url = renderer.domElement.toDataURL('image/webp', 0.82);
+  // 앱과 같은 기준으로 부품·단계 수 (index.html의 isBrickGroup / buildSteps)
+  const bricks = [];
+  (function walk(o) { for (const c of o.children) { if (!c.isGroup) continue;
+    const type = c.userData.type || '', name = (c.userData.fileName || c.name || '').toLowerCase();
+    if (/part|shortcut/i.test(type) || name.endsWith('.dat')) bricks.push(c); else walk(c); } })(group);
+  const steps = new Set(bricks.map(b => b.userData.buildingStep ?? 0)).size;
+  scene.remove(group);
+  group.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
+  return { url, parts: bricks.length, steps: steps > 1 ? steps : 0 };
+};
+window.ready = true;
+</script>
+</body>
+</html>

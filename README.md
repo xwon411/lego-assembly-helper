@@ -59,6 +59,7 @@ Studio에서 `File → Export As → LDraw (.ldr / .mpd)` 로 저장한 뒤 열�
 ## 출처 / 라이선스
 
 - 샘플 모델 (`samples/`) — three.js 예제에 포함된 LDraw 모델 (부품 내장 형식)
+- 세트 갤러리 모델 (`sets/`) — [LDraw.org 공식 모델 저장소(OMR)](https://library.ldraw.org/omr)의 파일, 각 파일 제작자의 저작물 (CCAL 2.0). 제작자는 `sets/catalog.json`과 앱 화면에 표시
   - `car.mpd` — James Jessiman (LDraw 기본 예제)
   - `mini-construction.mpd` — Ken Drew, 4915 Mini Construction · CCAL 2.0
   - `lighthouse.mpd` — Merlijn Wissink, 30023 Lighthouse · CCAL 2.0
