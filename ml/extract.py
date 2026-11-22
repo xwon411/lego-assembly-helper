@@ -23,7 +23,7 @@ async def main():
             u=r.request.url
             if 'three@0.170.0/' in u: await r.fulfill(path=T3+u.split('three@0.170.0/')[1], content_type='application/javascript')
             else: await r.abort()
-        ctx=await b.new_context(viewport={'width':800,'height':600}); await ctx.add_init_script("localStorage.setItem('lah:guideSeen','1')")
+        ctx=await b.new_context(viewport={'width':800,'height':600}); await ctx.add_init_script("localStorage.setItem('lah:guideSeen','1'); window.__noAI=true")
         pg=await ctx.new_page(); errs=[]; pg.on('pageerror', lambda e: errs.append(str(e)[:200]))
         await pg.route('https://cdn.jsdelivr.net/**', route)
         await pg.goto('http://127.0.0.1:'+str(PORT)+'/index.html?sample=samples/car.mpd')

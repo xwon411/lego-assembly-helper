@@ -40,6 +40,9 @@ FEAT_NAMES = ['조립부와 닿음', '닿은 수(log)', '아래 받침 있음', 
               '조립부와 거리', '조립부 대비 높이', '|조립부 대비 높이|', '직전 단계와 같은 모양', '직전 단계와 같은 모양·색',
               '면적(log)', '두께(log)', '연결 수(log)', '뿌리 홉', '뿌리 거리', '뿌리', '진행률', '아직 아무것도 없음',
               '직전 단계와 같은 덩어리', '직전 단계에 닿음', '덩어리 시작 전(덩어리 안 조립 0개)']
+USE_RULE = os.environ.get('USE_RULE', '0') == '1'
+if USE_RULE:
+    FEAT_NAMES = FEAT_NAMES + ['규칙상 남은 것 중 맨 앞', '규칙 순서 차이']
 
 
 def state_features(m, placed, last, cand, color):
@@ -77,7 +80,8 @@ def state_features(m, placed, last, cand, color):
         dL, dS, relh, np.abs(relh), same_shape, same_sc,
         m['area'][cand], m['thick'][cand], m['deg'][cand], m['hop'][cand], m['geo'][cand], m['isroot'][cand],
         prog, empty, same_comp, touchL, fresh,
-    ])
+    ] + ([(m['heur'][cand] == m['heur'][cand].min()).astype(float),
+          (m['heur'][cand] - m['heur'][cand].min()) / (m['heur'].max() + 1)] if USE_RULE else []))
 
 
 def train_rows(m, color, max_rows=40000):
