@@ -30,6 +30,11 @@ async def main():
         await pg.fill('#gSearch','zzzz'); await pg.wait_for_timeout(300); print('search none:', await pg.text_content('#gCount'), await pg.locator('.g-empty').count())
         await pg.fill('#gSearch','')
         await pg.click('.g-card:has-text("Lakeside Lodge")')
+        await pg.wait_for_timeout(500)
+        if await pg.evaluate("document.getElementById('gPick').classList.contains('on')"):   # 3-in-1 세트: 모델 고르기 창
+            print('pick options:', await pg.locator('#gPickOpts .opt').count())
+            await pg.screenshot(path='/tmp/gallery_pick.png')
+            await pg.click('#gPickOpts .opt >> nth=0')
         await pg.wait_for_function("window.__app && __app.state.steps.length>0 && !document.getElementById('overlay').classList.contains('on')", timeout=300000)
         print('loaded:', await pg.text_content('#modelInfo'), '| url', pg.url, '| guide', await pg.evaluate("document.getElementById('guide').classList.contains('on')"))
         await pg.evaluate("document.getElementById('guide').classList.remove('on')")
