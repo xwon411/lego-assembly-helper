@@ -309,6 +309,8 @@
   .switch:hover { background: var(--paper); }
   .switch[aria-pressed="true"]::after { background-color: var(--blue); box-shadow: inset 0 0 0 2px var(--blue); }
   .menu select { border: 0; background: var(--paper); border-radius: 8px; height: 32px; }
+  .view.playing .stage-hint { font-size: 0; }
+  .view.playing .stage-hint::after { content: "자동재생 중 · 화면을 누르면 멈춰요"; font-size: 14px; }
   .stage-hint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 2; pointer-events: none; background: rgba(25,31,40,.86); color: #fff; padding: 10px 16px; border-radius: 12px; font-weight: 600; font-size: 14px; white-space: nowrap; }
   .progress-label { font-size: 13px; color: var(--muted); font-weight: 500; order: 2; }
   .progress { height: 10px; border-radius: 5px; background: var(--paper); margin: 0 0 8px; }
@@ -691,9 +693,12 @@ let blink = null;  // { bricks, start, dur, li }
 function requestRender() {
   if (!renderQueued) { renderQueued = true; requestAnimationFrame(frame); }
 }
+let lastFrame = 0;
 function frame(now) {
   renderQueued = false;
-  let busy = false;
+  let busy = state.playing || controls.autoRotate;
+  const dt = lastFrame ? Math.min(0.1, (now - lastFrame) / 1000) : 0;
+  lastFrame = now;
 
   // 부품 낙하 애니메이션
   for (let i = anims.length - 1; i >= 0; i--) {
@@ -725,9 +730,10 @@ function frame(now) {
     }
   }
 
-  const damping = controls.update();
+  const damping = controls.update(controls.autoRotate ? dt : null);
   renderer.render(scene, camera);
   if (busy || damping) requestRender();
+  else lastFrame = 0;
 }
 const easeInOut = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 const easeOutBack = t => { const c1 = 1.2, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
@@ -1441,6 +1447,7 @@ setInterval(() => { if (state.timing && !document.hidden) updateTiming(); }, 500
 // 15초마다 시간 저장 (창을 그냥 닫아도 대부분 남도록)
 setInterval(() => { if (state.timing?.last != null && !state.timing.done) saveProgress(); }, 15000);
 for (const ev of ['pointerdown', 'wheel']) ui.view.addEventListener(ev, activity, { passive: true });
+renderer.domElement.addEventListener('pointerdown', () => { if (state.playing) stopPlay(); else if (controls.autoRotate) stopPlay(); });   // 자동재생 중 화면을 누르면 멈춤
 $('side').addEventListener('pointerdown', activity, { passive: true });
 
 // 사람이 직접 단계를 넘길 때 (버튼·키보드). 한 단계씩 앞으로 갈 때만 "조립한 부품"으로 셈.
@@ -1509,7 +1516,8 @@ function findParts(key, li) {
 function dropIn(bricks) {
   const h = Math.max(60, Math.min(200, (state.modelBox?.getSize(new THREE.Vector3()).y || 100) * 0.35));
   const now = performance.now();
-  const stagger = Math.min(80, 700 / Math.max(1, bricks.length));
+  const fast = state.playing ? Math.min(1, playInterval() / 700) : 1;   // 자동재생 템포에 맞춰 줄임
+  const stagger = Math.min(80, 700 / Math.max(1, bricks.length)) * fast;
   bricks.forEach((b, i) => {
     const info = state.info.get(b);
     const parent = b.parent;
@@ -1520,7 +1528,7 @@ function dropIn(bricks) {
     const offset = c.sub(a);
     const from = info.basePos.clone().add(offset);
     b.position.copy(from);
-    anims.push({ brick: b, from, to: info.basePos.clone(), start: now + i * stagger, dur: 620 });
+    anims.push({ brick: b, from, to: info.basePos.clone(), start: now + i * stagger, dur: Math.max(140, 620 * fast) });
   });
 }
 
@@ -1990,37 +1998,68 @@ for (const [id, mode] of [['prepByColor', 'color'], ['prepByKind', 'kind']]) {
   };
 }
 
-// 자동 재생
-let playTimer = null;
+// 자동 재생 = "조립 과정 감상 모드": 빠른 템포로 쌓으면서 카메라가 완성 모델 주위를 천천히 돈다.
+// 템포는 모델 크기에 맞춰 전체가 SHOW_TOTAL초 안팎에 끝나게 (단계가 적은 모델은 한 단계 최대 속도값의 절반까지만 느려짐)
+const SHOW_TOTAL = { 1200: 15000, 2200: 30000, 4000: 60000, 7000: 120000 };  // 속도 설정별 전체 재생 시간(ms)
+const ORBIT_SPEED = 3.2;   // OrbitControls.autoRotateSpeed (2 = 30초에 한 바퀴 → 3.2 ≈ 19초에 한 바퀴)
+let playTimer = null, orbitStopTimer = null;
+function playInterval() {
+  const base = +ui.speed.value || 2200;
+  const total = SHOW_TOTAL[base] || 30000;
+  return Math.round(Math.max(150, Math.min(base * 0.5, total / Math.max(1, state.steps.length))));
+}
+function playTick() {
+  if (state.cur >= state.steps.length - 1) return finishPlay();
+  goTo(state.cur + 1, { camera: false });
+}
 function startPlay() {
   if (!state.steps.length) return;
-  if (state.cur >= state.steps.length - 1) goTo(0, { animate: false });
+  if (state.cur >= state.steps.length - 1) goTo(0, { animate: false, camera: false });
   state.playing = true;
   ui.play.setAttribute('aria-pressed', 'true');
   ui.play.textContent = '멈춤';
-  playTimer = setInterval(() => {
-    if (state.cur >= state.steps.length - 1) return stopPlay();
-    goTo(state.cur + 1);
-  }, playInterval());
+  ui.view.classList.add('playing');
+  clearTimeout(orbitStopTimer);
+  // 완성 모델 전체가 들어오는 거리에서, 조금 내려다보는 각도로 → 그 자리에서 계속 회전
+  if (state.modelBox) {
+    const c = state.modelBox.getCenter(new THREE.Vector3());
+    const off = camera.position.clone().sub(controls.target);
+    const sph = new THREE.Spherical().setFromVector3(off);
+    sph.phi = THREE.MathUtils.degToRad(58);
+    off.setFromSpherical(sph).normalize();
+    camera.position.copy(controls.target).add(off);   // 방향만 먼저 바꾸고 거리는 tween으로
+    tweenCamera(c, fitDistance(state.modelBox) * 0.78, 900);
+  }
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = ORBIT_SPEED;
+  playTimer = setInterval(playTick, playInterval());
+  requestRender();
 }
-function stopPlay() {
+// 끝까지 쌓으면: 새 부품 강조를 지우고 완성 모델을 한 바퀴 더 보여 준 뒤 회전을 멈춤
+function finishPlay() {
+  stopPlay(true);
+  for (const b of state.bricks) applyBrickState(b, 'normal');
+  showArrows([]);
+  requestRender();
+  orbitStopTimer = setTimeout(() => { controls.autoRotate = false; }, 60 / ORBIT_SPEED * 1000);
+}
+function stopPlay(keepOrbit = false) {
+  const was = state.playing;
   state.playing = false;
   clearInterval(playTimer); playTimer = null;
   ui.play.setAttribute('aria-pressed', 'false');
   ui.play.textContent = '자동재생';
+  ui.view.classList.remove('playing');
+  if (!keepOrbit) { clearTimeout(orbitStopTimer); controls.autoRotate = false; }
+  if (was) requestRender();
 }
 ui.play.onclick = () => state.playing ? stopPlay() : startPlay();
-
-function playInterval() { return +ui.speed.value || 2200; }
 try { const v = localStorage.getItem('lah:speed'); if (v && [...ui.speed.options].some(o => o.value === v)) ui.speed.value = v; } catch {}
 ui.speed.onchange = () => {
   try { localStorage.setItem('lah:speed', ui.speed.value); } catch {}
   if (state.playing) { // 재생 중이면 새 속도로 바로 이어서
     clearInterval(playTimer);
-    playTimer = setInterval(() => {
-      if (state.cur >= state.steps.length - 1) return stopPlay();
-      goTo(state.cur + 1);
-    }, playInterval());
+    playTimer = setInterval(playTick, playInterval());
   }
   ui.speed.blur();
 };
@@ -2340,7 +2379,7 @@ if (qs.get('sample')) {
 }
 
 // 디버그/테스트용
-window.__app = { state, goTo, userMove, loadFromText, arrowGroup, insertDir, thumbQueue, thumbCache, scene, camera, netFailed, findParts, keyOf, liveElapsed, secPerPart, get blink() { return blink; } };
+window.__app = { state, goTo, userMove, loadFromText, arrowGroup, insertDir, thumbQueue, thumbCache, scene, camera, controls, netFailed, findParts, keyOf, liveElapsed, secPerPart, get blink() { return blink; } };
 </script>
 </body>
 </html>
